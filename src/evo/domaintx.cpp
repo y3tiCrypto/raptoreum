@@ -6,6 +6,7 @@
 #include <evo/domainpayloads.h>
 #include <evo/domaindb.h>
 #include <validation.h>
+#include <assets/assets.h>
 #include <messagesigner.h>
 #include <chainparams.h>
 #include <key_io.h>
@@ -121,6 +122,17 @@ bool CheckDomainRegisterTx(const CTransaction& tx, const CBlockIndex* pindexPrev
         uint64_t now = pindexPrev ? pindexPrev->GetBlockTime() : GetTime();
         if (now <= meta.expires_at + 30 * 86400) {
             return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-collision");
+        }
+    }
+
+    // Check collision/ownership for existing NFAsset domain
+    std::string assetId;
+    if (passetsCache && passetsCache->GetAssetId(payload.strDomainName, assetId)) {
+        CAssetMetaData assetMeta;
+        if (passetsCache->GetAssetMetaData(assetId, assetMeta)) {
+            if (payload.ownerAddress != assetMeta.ownerAddress) {
+                return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-asset-owner-mismatch");
+            }
         }
     }
 
