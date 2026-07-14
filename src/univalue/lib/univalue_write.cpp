@@ -60,7 +60,7 @@ string UniValue::write(unsigned int prettyIndent,
 }
 
 static void indentStr(unsigned int prettyIndent, unsigned int indentLevel, string &s) {
-    s.append(prettyIndent * indentLevel, ' ');
+    s.append(static_cast<size_t>(prettyIndent) * indentLevel, ' ');
 }
 
 void UniValue::writeArray(unsigned int prettyIndent, unsigned int indentLevel, string &s) const {
