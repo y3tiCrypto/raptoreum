@@ -315,6 +315,9 @@ void SendAssetsDialog::send(QList <SendCoinsRecipient> recipients) {
         amount.append("</b> ");
         // generate monospace address string
         QString address = "<span style='font-family: monospace;'>" + rcp.address;
+        if (!rcp.resolvedAddress.isEmpty()) {
+            address.append(" (resolved to " + rcp.resolvedAddress + ")");
+        }
         address.append("</span>");
 
         QString recipientElement;

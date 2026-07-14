@@ -29,6 +29,8 @@
 #include <validation.h>
 #include <assets/assets.h>
 #include <assets/assetstype.h>
+#include <evo/domaindb.h>
+#include <util/time.h>
 
 #include <stdint.h>
 #include <functional>
@@ -168,14 +170,27 @@ void WalletModel::updateWatchOnlyFlag(bool fHaveWatchonly) {
 }
 
 bool WalletModel::validateAddress(const QString &address) {
-    return IsValidDestinationString(address.toStdString());
+    std::string addressStr = address.toStdString();
+    if (IsValidDestinationString(addressStr)) {
+        return true;
+    }
+
+    CDomainMetaData meta;
+    if (pdomaindb && pdomaindb->ReadDomainData(addressStr, meta)) {
+        uint64_t now = GetTime();
+        if (now <= meta.expires_at + 30 * 86400) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 WalletModel::SendCoinsReturn
 WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl &coinControl) {
     CAmount total = 0;
     bool fSubtractFeeFromAmount = false;
-    QList <SendCoinsRecipient> recipients = transaction.getRecipients();
+    QList <SendCoinsRecipient> &recipients = transaction.getRecipients();
     std::vector <CRecipient> vecSend;
 
     if (recipients.empty()) {
@@ -192,7 +207,7 @@ WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoin
     FuturePartialPayload fpp;
     bool hasFuture = false;
     // Pre-check input data for validity
-    for (const SendCoinsRecipient &rcp: recipients) {
+    for (SendCoinsRecipient &rcp: recipients) {
         if (rcp.fSubtractFeeFromAmount)
             fSubtractFeeFromAmount = true;
         {   // User-entered raptoreum address / amount:
@@ -204,7 +219,17 @@ WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoin
             }
             setAddress.insert(rcp.address);
             ++nAddresses;
-            CScript scriptPubKey = GetScriptForDestination(DecodeDestination(rcp.address.toStdString()));
+
+            std::string addressStr = rcp.address.toStdString();
+            if (!IsValidDestinationString(addressStr)) {
+                CDomainMetaData meta;
+                if (pdomaindb && pdomaindb->ReadDomainData(addressStr, meta)) {
+                    rcp.resolvedAddress = QString::fromStdString(EncodeDestination(meta.resolver));
+                }
+            }
+
+            QString addrStr = rcp.resolvedAddress.isEmpty() ? rcp.address : rcp.resolvedAddress;
+            CScript scriptPubKey = GetScriptForDestination(DecodeDestination(addrStr.toStdString()));
             CRecipient recipient = {scriptPubKey, rcp.amount, rcp.fSubtractFeeFromAmount};
             if (rcp.isFutureOutput) {
                 hasFuture = true;
@@ -310,7 +335,7 @@ WalletModel::SendAssetsReturn
 WalletModel::prepareAssetTransaction(WalletModelTransaction &transaction, const CCoinControl &coinControl) {
     CAmount total = 0;
     bool fSubtractFeeFromAmount = false;
-    QList <SendCoinsRecipient> recipients = transaction.getRecipients();
+    QList <SendCoinsRecipient> &recipients = transaction.getRecipients();
     std::vector <CRecipient> vecSend;
     std::map <std::string, CAmount> assetamount;
 
@@ -328,7 +353,7 @@ WalletModel::prepareAssetTransaction(WalletModelTransaction &transaction, const 
     FuturePartialPayload fpp;
     bool hasFuture = false;
     // Pre-check input data for validity
-    for (const SendCoinsRecipient &rcp: recipients) {
+    for (SendCoinsRecipient &rcp: recipients) {
         if (rcp.fSubtractFeeFromAmount)
             fSubtractFeeFromAmount = true;
 
@@ -342,7 +367,17 @@ WalletModel::prepareAssetTransaction(WalletModelTransaction &transaction, const 
             setAddress.insert(rcp.address);
             ++nAddresses;
             CRecipient recipient;
-            CScript scriptPubKey = GetScriptForDestination(DecodeDestination(rcp.address.toStdString()));
+
+            std::string addressStr = rcp.address.toStdString();
+            if (!IsValidDestinationString(addressStr)) {
+                CDomainMetaData meta;
+                if (pdomaindb && pdomaindb->ReadDomainData(addressStr, meta)) {
+                    rcp.resolvedAddress = QString::fromStdString(EncodeDestination(meta.resolver));
+                }
+            }
+
+            QString addrStr = rcp.resolvedAddress.isEmpty() ? rcp.address : rcp.resolvedAddress;
+            CScript scriptPubKey = GetScriptForDestination(DecodeDestination(addrStr.toStdString()));
             if (rcp.assetAmount > 0 && rcp.amount == 0) {
                 std::string assetId;
                 if (!passetsCache->GetAssetId(rcp.assetId.toStdString(), assetId))

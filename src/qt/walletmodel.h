@@ -75,6 +75,7 @@ public:
     QString assetId;
     uint64_t uniqueId;
     QString address;
+    QString resolvedAddress;
     QString label;
     CAmount amount;
     CAmount assetAmount;

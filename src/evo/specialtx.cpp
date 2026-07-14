@@ -14,6 +14,9 @@
 #include <evo/deterministicmns.h>
 #include <llmq/quorums_commitment.h>
 #include <llmq/quorums_blockprocessor.h>
+#include <evo/domaindb.h>
+#include <evo/domainpayloads.h>
+#include <evo/domaintx.h>
 
 bool CheckSpecialTx(const CTransaction &tx, const CBlockIndex *pindexPrev, CValidationState &state,
                     const CCoinsViewCache &view, CAssetsCache *assetsCache, bool check_sigs) {
@@ -46,6 +49,12 @@ bool CheckSpecialTx(const CTransaction &tx, const CBlockIndex *pindexPrev, CVali
                 return CheckUpdateAssetTx(tx, pindexPrev, state, view, assetsCache);
             case TRANSACTION_MINT_ASSET:
                 return CheckMintAssetTx(tx, pindexPrev, state, view, assetsCache);
+            case TRANSACTION_DOMAIN_REGISTER:
+                return CheckDomainRegisterTx(tx, pindexPrev, state);
+            case TRANSACTION_DOMAIN_UPDATE:
+                return CheckDomainUpdateTx(tx, pindexPrev, state);
+            case TRANSACTION_DOMAIN_TRANSFER:
+                return CheckDomainTransferTx(tx, pindexPrev, state);
         }
     } catch (const std::exception &e) {
         LogPrintf("%s -- failed: %s\n", __func__, e.what());
@@ -78,6 +87,96 @@ bool ProcessSpecialTx(const CTransaction &tx, const CBlockIndex *pindex, CValida
             return true;
         case TRANSACTION_MINT_ASSET:
             return true;
+        case TRANSACTION_DOMAIN_REGISTER: {
+            CDomainRegisterPayload payload;
+            if (!GetTxPayload(tx, payload)) {
+                return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-payload");
+            }
+            CDomainMetaData existingMeta;
+            bool existed = pdomaindb && pdomaindb->ReadDomainData(payload.strDomainName, existingMeta);
+
+            CDomainBlockUndo undoRecord;
+            undoRecord.strDomainName = payload.strDomainName;
+            undoRecord.fWasNew = true;
+            if (existed) {
+                undoRecord.prevMetadata = existingMeta;
+            }
+
+            CDomainMetaData newMeta;
+            newMeta.name = payload.strDomainName;
+            newMeta.owner = payload.ownerAddress;
+            newMeta.resolver = payload.ownerAddress;
+            newMeta.registered_at = pindex->GetBlockTime();
+            newMeta.expires_at = pindex->GetBlockTime() + 31536000;
+            newMeta.ipfs_cid = "";
+            newMeta.json_metadata = "";
+
+            if (pdomaindb) {
+                pdomaindb->WriteDomainData(payload.strDomainName, newMeta);
+                pdomaindb->WriteReverseRecord(payload.ownerAddress, payload.strDomainName);
+
+                std::vector<CDomainBlockUndo> undoData;
+                pdomaindb->ReadBlockUndoData(pindex->GetBlockHash(), undoData);
+                undoData.push_back(undoRecord);
+                pdomaindb->WriteBlockUndoData(pindex->GetBlockHash(), undoData);
+            }
+            return true;
+        }
+        case TRANSACTION_DOMAIN_UPDATE: {
+            CDomainUpdatePayload payload;
+            if (!GetTxPayload(tx, payload)) {
+                return state.DoS(100, false, REJECT_INVALID, "bad-domain-update-payload");
+            }
+            CDomainMetaData existingMeta;
+            if (pdomaindb && pdomaindb->ReadDomainData(payload.strDomainName, existingMeta)) {
+                CDomainBlockUndo undoRecord;
+                undoRecord.strDomainName = payload.strDomainName;
+                undoRecord.fWasNew = false;
+                undoRecord.prevMetadata = existingMeta;
+
+                CDomainMetaData updatedMeta = existingMeta;
+                updatedMeta.resolver = payload.primaryAddress;
+                updatedMeta.ipfs_cid = payload.strIpfsCid;
+                updatedMeta.json_metadata = payload.strJsonMetadata;
+
+                pdomaindb->WriteDomainData(payload.strDomainName, updatedMeta);
+
+                if (existingMeta.resolver != payload.primaryAddress) {
+                    pdomaindb->EraseReverseRecord(existingMeta.resolver);
+                    pdomaindb->WriteReverseRecord(payload.primaryAddress, payload.strDomainName);
+                }
+
+                std::vector<CDomainBlockUndo> undoData;
+                pdomaindb->ReadBlockUndoData(pindex->GetBlockHash(), undoData);
+                undoData.push_back(undoRecord);
+                pdomaindb->WriteBlockUndoData(pindex->GetBlockHash(), undoData);
+            }
+            return true;
+        }
+        case TRANSACTION_DOMAIN_TRANSFER: {
+            CDomainTransferPayload payload;
+            if (!GetTxPayload(tx, payload)) {
+                return state.DoS(100, false, REJECT_INVALID, "bad-domain-transfer-payload");
+            }
+            CDomainMetaData existingMeta;
+            if (pdomaindb && pdomaindb->ReadDomainData(payload.strDomainName, existingMeta)) {
+                CDomainBlockUndo undoRecord;
+                undoRecord.strDomainName = payload.strDomainName;
+                undoRecord.fWasNew = false;
+                undoRecord.prevMetadata = existingMeta;
+
+                CDomainMetaData updatedMeta = existingMeta;
+                updatedMeta.owner = payload.newOwnerAddress;
+
+                pdomaindb->WriteDomainData(payload.strDomainName, updatedMeta);
+
+                std::vector<CDomainBlockUndo> undoData;
+                pdomaindb->ReadBlockUndoData(pindex->GetBlockHash(), undoData);
+                undoData.push_back(undoRecord);
+                pdomaindb->WriteBlockUndoData(pindex->GetBlockHash(), undoData);
+            }
+            return true;
+        }
     }
     return state.DoS(100, false, REJECT_INVALID, "bad-tx-type-proc");
 }
@@ -105,6 +204,44 @@ bool UndoSpecialTx(const CTransaction &tx, const CBlockIndex *pindex) {
             return true;
         case TRANSACTION_MINT_ASSET:
             return true;
+        case TRANSACTION_DOMAIN_REGISTER:
+        case TRANSACTION_DOMAIN_UPDATE:
+        case TRANSACTION_DOMAIN_TRANSFER: {
+            if (pdomaindb) {
+                std::vector<CDomainBlockUndo> undoData;
+                if (pdomaindb->ReadBlockUndoData(pindex->GetBlockHash(), undoData) && !undoData.empty()) {
+                    CDomainBlockUndo undo = undoData.back();
+                    undoData.pop_back();
+
+                    if (undoData.empty()) {
+                        pdomaindb->EraseBlockUndoData(pindex->GetBlockHash());
+                    } else {
+                        pdomaindb->WriteBlockUndoData(pindex->GetBlockHash(), undoData);
+                    }
+
+                    if (undo.fWasNew) {
+                        CDomainMetaData currentMeta;
+                        if (pdomaindb->ReadDomainData(undo.strDomainName, currentMeta)) {
+                            pdomaindb->EraseReverseRecord(currentMeta.owner);
+                        }
+                        pdomaindb->EraseDomainData(undo.strDomainName);
+
+                        if (!undo.prevMetadata.name.empty()) {
+                            pdomaindb->WriteDomainData(undo.strDomainName, undo.prevMetadata);
+                            pdomaindb->WriteReverseRecord(undo.prevMetadata.owner, undo.strDomainName);
+                        }
+                    } else {
+                        CDomainMetaData currentMeta;
+                        if (pdomaindb->ReadDomainData(undo.strDomainName, currentMeta)) {
+                            pdomaindb->EraseReverseRecord(currentMeta.resolver);
+                        }
+                        pdomaindb->WriteDomainData(undo.strDomainName, undo.prevMetadata);
+                        pdomaindb->WriteReverseRecord(undo.prevMetadata.resolver, undo.strDomainName);
+                    }
+                }
+            }
+            return true;
+        }
     }
     return false;
 }

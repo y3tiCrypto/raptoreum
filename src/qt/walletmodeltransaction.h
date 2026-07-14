@@ -21,7 +21,8 @@ class WalletModelTransaction {
 public:
     explicit WalletModelTransaction(const QList <SendCoinsRecipient> &recipients);
 
-    QList <SendCoinsRecipient> getRecipients() const;
+    QList <SendCoinsRecipient> &getRecipients();
+    const QList <SendCoinsRecipient> &getRecipients() const;
 
     CTransactionRef &getWtx();
 

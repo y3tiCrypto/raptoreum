@@ -31,6 +31,7 @@
 #include <key.h>
 #include <mapport.h>
 #include <validation.h>
+#include <evo/domaindb.h>
 #include <miner.h>
 #include <netbase.h>
 #include <net.h>
@@ -323,6 +324,7 @@ void PrepareShutdown(NodeContext &node) {
         }
         pblocktree.reset();
         passetsdb.reset();
+        pdomaindb.reset();
         passetsCache.reset();
         llmq::DestroyLLMQSystem();
         deterministicMNManager.reset();
@@ -2184,6 +2186,8 @@ bool AppInitMain(const util::Ref &context, NodeContext &node, interfaces::BlockA
 
                 passetsdb.reset();
                 passetsdb.reset(new CAssetsDB(nBlockTreeDBCache, false, fReset));
+                pdomaindb.reset();
+                pdomaindb.reset(new CDomainDB(nBlockTreeDBCache, false, fReset));
                 passetsCache.reset();
                 passetsCache.reset(new CAssetsCache());
 

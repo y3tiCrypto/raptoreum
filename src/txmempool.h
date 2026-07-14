@@ -582,6 +582,7 @@ private:
 
     std::map <std::string, uint256> mapAssetsToHash;
     std::map <std::string, uint256> mapAssetsIdToHash;
+    std::map <std::string, uint256> mapDomainsToHash;
 
     void UpdateParent(txiter entry, txiter parent, bool add);
 
@@ -841,6 +842,7 @@ public:
     bool existsProviderTxConflict(const CTransaction &tx) const;
 
     bool existsAssetTxConflict(const CTransaction &tx) const;
+    bool existsDomainTxConflict(const CTransaction &tx) const;
 
     bool CheckForNewAssetConflict(const std::string assetName) const;
 

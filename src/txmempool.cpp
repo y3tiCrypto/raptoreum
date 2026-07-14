@@ -27,6 +27,7 @@
 #include <llmq/quorums_instantsend.h>
 #include <assets/assetstype.h>
 #include <assets/assets.h>
+#include <evo/domainpayloads.h>
 
 #include <future/utils.h>
 
@@ -473,6 +474,11 @@ void CTxMemPool::addUnchecked(const CTxMemPoolEntry &entry, setEntries &setAnces
         bool ok = GetTxPayload(tx, assetTx);
         assert(ok);
         mapAssetsIdToHash.emplace(assetTx.assetId, tx.GetHash());
+    } else if (tx.nType == TRANSACTION_DOMAIN_REGISTER) {
+        CDomainRegisterPayload domainTx;
+        bool ok = GetTxPayload(tx, domainTx);
+        assert(ok);
+        mapDomainsToHash.emplace(domainTx.strDomainName, tx.GetHash());
     }
 }
 
@@ -813,6 +819,12 @@ void CTxMemPool::removeUnchecked(txiter it, MemPoolRemovalReason reason) {
             assert(false);
         }
         mapAssetsIdToHash.erase(assetTx.assetId);
+    } else if (it->GetTx().nType == TRANSACTION_DOMAIN_REGISTER) {
+        CDomainRegisterPayload domainTx;
+        if (!GetTxPayload(it->GetTx(), domainTx)) {
+            assert(false);
+        }
+        mapDomainsToHash.erase(domainTx.strDomainName);
     }
 
     totalTxSize -= it->GetTxSize();
@@ -1494,6 +1506,20 @@ bool CTxMemPool::existsAssetTxConflict(const CTransaction &tx) const {
         return it != mapAssetsIdToHash.end() && it->second != tx.GetHash();
     }
 
+    return false;
+}
+
+bool CTxMemPool::existsDomainTxConflict(const CTransaction &tx) const {
+    LOCK(cs);
+
+    if (tx.nType == TRANSACTION_DOMAIN_REGISTER) {
+        CDomainRegisterPayload domainTx;
+        if (!GetTxPayload(tx, domainTx)) {
+            return true;
+        }
+        auto it = mapDomainsToHash.find(domainTx.strDomainName);
+        return it != mapDomainsToHash.end() && it->second != tx.GetHash();
+    }
     return false;
 }
 

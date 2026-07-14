@@ -46,6 +46,8 @@
 #include <util/system.h>
 #include <validationinterface.h>
 #include <warnings.h>
+#include <evo/domaindb.h>
+#include <evo/domaintx.h>
 
 #include <smartnode/smartnode-payments.h>
 //#include <smartnode/smartnode-collaterals.h>
@@ -184,6 +186,7 @@ CBlockIndex *FindForkInGlobalIndex(const CChain &chain, const CBlockLocator &loc
 
 std::unique_ptr <CBlockTreeDB> pblocktree;
 std::unique_ptr <CAssetsDB> passetsdb;
+std::unique_ptr <CDomainDB> pdomaindb;
 std::unique_ptr <CAssetsCache> passetsCache;
 
 // See definition for documentation
@@ -390,7 +393,10 @@ ContextualCheckTransaction(const CTransaction &tx, CValidationState &state, cons
                 tx.nType != TRANSACTION_FUTURE &&
                 tx.nType != TRANSACTION_NEW_ASSET &&
                 tx.nType != TRANSACTION_UPDATE_ASSET &&
-                tx.nType != TRANSACTION_MINT_ASSET) {
+                tx.nType != TRANSACTION_MINT_ASSET &&
+                tx.nType != TRANSACTION_DOMAIN_REGISTER &&
+                tx.nType != TRANSACTION_DOMAIN_UPDATE &&
+                tx.nType != TRANSACTION_DOMAIN_TRANSFER) {
                 return state.DoS(100, false, REJECT_INVALID, "bad-txns-type");
             }
             if (tx.IsCoinBase() && tx.nType != TRANSACTION_COINBASE)
@@ -783,6 +789,9 @@ static bool AcceptToMemoryPoolWorker(const CChainParams &chainparams, CTxMemPool
         //check for asset conflicts on mempool
         if (pool.existsAssetTxConflict(tx)) {
             return state.DoS(0, false, REJECT_DUPLICATE, "asset-dup");
+        }
+        if (pool.existsDomainTxConflict(tx)) {
+            return state.DoS(0, false, REJECT_DUPLICATE, "domain-dup");
         }
 
         // If we aren't going to actually accept it but just were verifying it, we are fine already

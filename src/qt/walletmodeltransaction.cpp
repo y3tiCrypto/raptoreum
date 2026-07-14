@@ -17,7 +17,11 @@ WalletModelTransaction::WalletModelTransaction(const QList <SendCoinsRecipient> 
         fee(0) {
 }
 
-QList <SendCoinsRecipient> WalletModelTransaction::getRecipients() const {
+QList <SendCoinsRecipient> &WalletModelTransaction::getRecipients() {
+    return recipients;
+}
+
+const QList <SendCoinsRecipient> &WalletModelTransaction::getRecipients() const {
     return recipients;
 }
 
@@ -43,7 +47,8 @@ void WalletModelTransaction::reassignAmounts() {
         SendCoinsRecipient &rcp = (*it);
         {
             for (const auto &txout: wtx.get()->vout) {
-                CScript scriptPubKey = GetScriptForDestination(DecodeDestination(rcp.address.toStdString()));
+                QString addrStr = rcp.resolvedAddress.isEmpty() ? rcp.address : rcp.resolvedAddress;
+                CScript scriptPubKey = GetScriptForDestination(DecodeDestination(addrStr.toStdString()));
                 if (txout.scriptPubKey == scriptPubKey) {
                     rcp.amount = txout.nValue;
                     break;

@@ -8,6 +8,9 @@
 #include <qt/guiutil.h>
 
 #include <key_io.h>
+#include <evo/domaindb.h>
+#include <validation.h>
+#include <util/time.h>
 
 /* Base58 characters are:
      "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -66,11 +69,11 @@ QValidator::State BitcoinAddressEntryValidator::validate(QString &input, int &po
     for (int idx = 0; idx < input.size(); ++idx) {
         int ch = input.at(idx).unicode();
 
-        if (((ch >= '0' && ch <= '9') ||
-             (ch >= 'a' && ch <= 'z') ||
-             (ch >= 'A' && ch <= 'Z')) &&
-            ch != 'l' && ch != 'I' && ch != '0' && ch != 'O') {
-            // Alphanumeric and not a 'forbidden' character
+        if ((ch >= '0' && ch <= '9') ||
+            (ch >= 'a' && ch <= 'z') ||
+            (ch >= 'A' && ch <= 'Z') ||
+            ch == '.' || ch == '-') {
+            // Alphanumeric, dot, or hyphen
         } else {
             state = QValidator::Invalid;
         }
@@ -85,9 +88,18 @@ BitcoinAddressCheckValidator::BitcoinAddressCheckValidator(QObject *parent) :
 
 QValidator::State BitcoinAddressCheckValidator::validate(QString &input, int &pos) const {
     Q_UNUSED(pos);
-    // Validate the passed Raptoreum address
-    if (IsValidDestinationString(input.toStdString())) {
+    std::string addressStr = input.toStdString();
+    if (IsValidDestinationString(addressStr)) {
         return QValidator::Acceptable;
+    }
+
+    // Check RNS domain
+    CDomainMetaData meta;
+    if (pdomaindb && pdomaindb->ReadDomainData(addressStr, meta)) {
+        uint64_t now = GetTime();
+        if (now <= meta.expires_at + 30 * 86400) {
+            return QValidator::Acceptable;
+        }
     }
 
     return QValidator::Invalid;

@@ -68,6 +68,8 @@ struct CBlockAssetUndo;
 
 class CAssetsDB;
 
+class CDomainDB;
+
 class CAssetsCache;
 
 struct ChainTxData;
@@ -1121,6 +1123,9 @@ extern std::unique_ptr <CBlockTreeDB> pblocktree;
 
 /** Global variable that point to the active assets database (protected by cs_main) */
 extern std::unique_ptr <CAssetsDB> passetsdb;
+
+/** Global variable that point to the active domain database (protected by cs_main) */
+extern std::unique_ptr <CDomainDB> pdomaindb;
 
 /** Global variable that point to the active assets cache (protected by cs_main) */
 extern std::unique_ptr <CAssetsCache> passetsCache;

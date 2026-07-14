@@ -170,6 +170,9 @@ BITCOIN_CORE_H = \
   evo/providertx.h \
   evo/simplifiedmns.h \
   evo/specialtx.h \
+  evo/domaindb.h \
+  evo/domainpayloads.h \
+  evo/domaintx.h \
   dsnotificationinterface.h \
   governance/governance.h \
   governance/governance-classes.h \
@@ -371,6 +374,8 @@ libraptoreum_server_a_SOURCES = \
   evo/providertx.cpp \
   evo/simplifiedmns.cpp \
   evo/specialtx.cpp \
+  evo/domaindb.cpp \
+  evo/domaintx.cpp \
   flatfile.cpp \
   httprpc.cpp \
   httpserver.cpp \
@@ -429,6 +434,7 @@ libraptoreum_server_a_SOURCES = \
   rpc/net.cpp \
   rpc/rawtransaction.cpp \
   rpc/rpcassets.cpp \
+  rpc/domain.cpp \
   rpc/rpcevo.cpp \
   rpc/rpcquorums.cpp \
   rpc/server.cpp \

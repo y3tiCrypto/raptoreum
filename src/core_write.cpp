@@ -26,6 +26,7 @@
 #include <llmq/quorums_commitment.h>
 #include <assets/assets.h>
 #include <assets/assetstype.h>
+#include <evo/domainpayloads.h>
 
 UniValue ValueFromAmount(const CAmount &amount) {
     bool sign = amount < 0;
@@ -378,6 +379,27 @@ void TxToUniv(const CTransaction &tx, const uint256 &hashBlock, UniValue &entry,
             UniValue obj;
             ctx.ToJson(obj);
             entry.push_back(Pair("MintAssetTx", obj));
+        }
+    } else if (tx.nType == TRANSACTION_DOMAIN_REGISTER) {
+        CDomainRegisterPayload ctx;
+        if (GetTxPayload(tx, ctx)) {
+            UniValue obj;
+            ctx.ToJson(obj);
+            entry.push_back(Pair("domainRegisterTx", obj));
+        }
+    } else if (tx.nType == TRANSACTION_DOMAIN_UPDATE) {
+        CDomainUpdatePayload ctx;
+        if (GetTxPayload(tx, ctx)) {
+            UniValue obj;
+            ctx.ToJson(obj);
+            entry.push_back(Pair("domainUpdateTx", obj));
+        }
+    } else if (tx.nType == TRANSACTION_DOMAIN_TRANSFER) {
+        CDomainTransferPayload ctx;
+        if (GetTxPayload(tx, ctx)) {
+            UniValue obj;
+            ctx.ToJson(obj);
+            entry.push_back(Pair("domainTransferTx", obj));
         }
     }
 

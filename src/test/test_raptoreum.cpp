@@ -32,6 +32,7 @@
 #include <llmq/quorums_init.h>
 #include <assets/assets.h>
 #include <assets/assetsdb.h>
+#include <evo/domaindb.h>
 
 #include <memory>
 
@@ -142,6 +143,7 @@ TestingSetup::TestingSetup(const std::string &chainName) : BasicTestingSetup(cha
     ::ChainstateActive().InitCoinsCache(1 << 23);
     assert(::ChainstateActive().CanFlushToDisk());
     passetsdb.reset(new CAssetsDB(1 << 23, false, true));
+    pdomaindb.reset(new CDomainDB(1 << 23, false, true));
     if (!LoadGenesisBlock(chainparams)) {
         throw std::runtime_error("LoadGenesisBlock failed.");
     }
@@ -181,6 +183,7 @@ TestingSetup::~TestingSetup() {
     m_node.chainman = nullptr;
     pblocktree.reset();
     passetsdb.reset();
+    pdomaindb.reset();
 }
 
 TestChainSetup::TestChainSetup(int blockCount) {
