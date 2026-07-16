@@ -15,18 +15,17 @@
 
 > **Etymology**: The name **Raptoreum** is derived from the Victorian term for a bird of prey (*raptor*), combined with the suffix *-ium* (a place or object pertaining to). 
 
-The Raptoreum project is built by an experienced team with deep roots in cyber security and systems engineering. Combining robust consensus security with advanced application capabilities, Raptoreum offers a secure, decentralized smart contract and asset platform.
+The Raptoreum project is built by an experienced team with deep roots in cyber security and systems engineering. Combining robust consensus security with advanced application capabilities, Raptoreum offers a secure, decentralized asset and naming platform.
 
 Initially starting on the Ravencoin codebase to enable trustless asset transfers, the project quickly evolved. Following security vulnerabilities discovered in Ravencoin's native asset code, that codebase was abandoned. Raptoreum has been completely re-architected as a **Dash code fork**, inheriting high-performance features like **ChainLocks**, **InstantSend**, and **Smartnode Quorums**, while introducing a unique custom asset layer and native protocols.
 
 Raptoreum expands the capabilities of the Dash core architecture by integrating:
-*   **A) Custom Asset Layer**: Native creation, updating, and minting of unique assets and tokens directly on-chain without the complexity of external smart contracts.
+*   **A) Custom Asset Layer**: Native creation, updating, and minting of unique assets and tokens directly on-chain.
 *   **B) Timelocked Transactions**: The capability to lock native coins (RTM) or assets in a special transaction until a chosen block height or timestamp is reached.
-*   **C) Trustless Asset Transfers**: On-chain transfer of assets and coins managed transparently via Smart Contracts.
-*   **D) Multi-Language Smart Contracts**: Developing a VM protocol allowing smart contract execution in four major programming languages (widening access beyond Solidity).
-*   **E) Raptoreum Name Service (RNS)**: A native, on-chain name resolution protocol featuring cryptographic commit-reveal protection, owner/manager role delegation, on-the-fly resolution in the QT Wallet, and consensus-level fee splits.
+*   **C) Trustless Asset Transfers**: Native on-chain transfer of assets and coins.
+*   **D) Raptoreum Name Service (RNS)**: A native, on-chain name resolution protocol featuring cryptographic commit-reveal protection, owner/manager role delegation, on-the-fly resolution in the QT Wallet, and consensus-level fee splits.
 
-These features extend the power of Raptoreum to a wider range of decentralized applications (dApps), providing developers with alternatives and flexibility, particularly in software language choices.
+These features extend the power and utility of the Raptoreum network, providing users and developers with unparalleled native flexibility.
 
 ---
 
