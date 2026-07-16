@@ -24,7 +24,7 @@ static UniValue resolvename(const JSONRPCRequest& request) {
             "resolvename \"name\" ( \"type\" )\n"
             "\nResolves an RNS domain name.\n"
             "\nArguments:\n"
-            "1. \"name\"             (string, required) The domain name (e.g. \"y3ti.rtm\")\n"
+            "1. \"name\"             (string, required) The domain name (e.g. \"example.rtm\")\n"
             "2. \"type\"             (string, optional) Specific record type (e.g. \"A\")\n"
             "\nResult:\n"
             "{\n"
@@ -202,7 +202,7 @@ static UniValue registerdomain(const JSONRPCRequest& request) {
             "registerdomain \"name\" \"owner_address\" \"salt\"\n"
             "\nRegisters a new RNS domain name revealing a previous commitment.\n"
             "\nArguments:\n"
-            "1. \"name\"             (string, required) Domain name (e.g. \"y3ti.rtm\")\n"
+            "1. \"name\"             (string, required) Domain name (e.g. \"example.rtm\")\n"
             "2. \"owner_address\"    (string, required) Destination owner address\n"
             "3. \"salt\"             (string, required) Secret 32-byte salt in hex\n"
         );

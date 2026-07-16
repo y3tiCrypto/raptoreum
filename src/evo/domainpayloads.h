@@ -18,7 +18,7 @@ class CDomainRegisterPayload {
 public:
     static const uint8_t CURRENT_VERSION = 2;
     uint8_t nVersion = CURRENT_VERSION;
-    std::string strDomainName;     // e.g., "y3ti.rtm" or "y3ti.raptoreum"
+    std::string strDomainName;     // e.g., "example.rtm" or "example.raptoreum"
     CKeyID ownerAddress;           // Primary owner address
     CAmount nFeePaid = 0;          // Standard/Premium RTM fee sent
     uint64_t nRegistrationTime = 0;// Block timestamp
