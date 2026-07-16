@@ -55,6 +55,8 @@ bool CheckSpecialTx(const CTransaction &tx, const CBlockIndex *pindexPrev, CVali
                 return CheckDomainUpdateTx(tx, pindexPrev, state);
             case TRANSACTION_DOMAIN_TRANSFER:
                 return CheckDomainTransferTx(tx, pindexPrev, state);
+            case TRANSACTION_DOMAIN_COMMIT:
+                return CheckDomainCommitTx(tx, pindexPrev, state);
         }
     } catch (const std::exception &e) {
         LogPrintf("%s -- failed: %s\n", __func__, e.what());
@@ -95,9 +97,20 @@ bool ProcessSpecialTx(const CTransaction &tx, const CBlockIndex *pindex, CValida
             CDomainMetaData existingMeta;
             bool existed = pdomaindb && pdomaindb->ReadDomainData(payload.strDomainName, existingMeta);
 
+            CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
+            ss << payload.strDomainName << payload.ownerAddress << payload.salt;
+            uint256 commitHash = ss.GetHash();
+
+            int nCommitHeight = 0;
+            if (pdomaindb) {
+                pdomaindb->ReadCommitment(commitHash, nCommitHeight);
+            }
+
             CDomainBlockUndo undoRecord;
             undoRecord.strDomainName = payload.strDomainName;
             undoRecord.fWasNew = true;
+            undoRecord.revealedCommitHash = commitHash;
+            undoRecord.nCommitHeight = nCommitHeight;
             if (existed) {
                 undoRecord.prevMetadata = existingMeta;
             }
@@ -106,6 +119,7 @@ bool ProcessSpecialTx(const CTransaction &tx, const CBlockIndex *pindex, CValida
             newMeta.name = payload.strDomainName;
             newMeta.owner = payload.ownerAddress;
             newMeta.resolver = payload.ownerAddress;
+            newMeta.manager = CKeyID();
             newMeta.registered_at = pindex->GetBlockTime();
             newMeta.expires_at = pindex->GetBlockTime() + 31536000;
             newMeta.ipfs_cid = "";
@@ -114,6 +128,7 @@ bool ProcessSpecialTx(const CTransaction &tx, const CBlockIndex *pindex, CValida
             if (pdomaindb) {
                 pdomaindb->WriteDomainData(payload.strDomainName, newMeta);
                 pdomaindb->WriteReverseRecord(payload.ownerAddress, payload.strDomainName);
+                pdomaindb->EraseCommitment(commitHash);
 
                 std::vector<CDomainBlockUndo> undoData;
                 pdomaindb->ReadBlockUndoData(pindex->GetBlockHash(), undoData);
@@ -138,6 +153,9 @@ bool ProcessSpecialTx(const CTransaction &tx, const CBlockIndex *pindex, CValida
                 updatedMeta.resolver = payload.primaryAddress;
                 updatedMeta.ipfs_cid = payload.strIpfsCid;
                 updatedMeta.json_metadata = payload.strJsonMetadata;
+                if (payload.nVersion >= 2) {
+                    updatedMeta.manager = payload.managerAddress;
+                }
 
                 pdomaindb->WriteDomainData(payload.strDomainName, updatedMeta);
 
@@ -167,6 +185,7 @@ bool ProcessSpecialTx(const CTransaction &tx, const CBlockIndex *pindex, CValida
 
                 CDomainMetaData updatedMeta = existingMeta;
                 updatedMeta.owner = payload.newOwnerAddress;
+                updatedMeta.manager = CKeyID(); // Clear manager on transfer
 
                 pdomaindb->WriteDomainData(payload.strDomainName, updatedMeta);
 
@@ -174,6 +193,16 @@ bool ProcessSpecialTx(const CTransaction &tx, const CBlockIndex *pindex, CValida
                 pdomaindb->ReadBlockUndoData(pindex->GetBlockHash(), undoData);
                 undoData.push_back(undoRecord);
                 pdomaindb->WriteBlockUndoData(pindex->GetBlockHash(), undoData);
+            }
+            return true;
+        }
+        case TRANSACTION_DOMAIN_COMMIT: {
+            CDomainCommitPayload payload;
+            if (!GetTxPayload(tx, payload)) {
+                return state.DoS(100, false, REJECT_INVALID, "bad-domain-commit-payload");
+            }
+            if (pdomaindb) {
+                pdomaindb->WriteCommitment(payload.hash, pindex->nHeight);
             }
             return true;
         }
@@ -204,6 +233,16 @@ bool UndoSpecialTx(const CTransaction &tx, const CBlockIndex *pindex) {
             return true;
         case TRANSACTION_MINT_ASSET:
             return true;
+        case TRANSACTION_DOMAIN_COMMIT: {
+            CDomainCommitPayload payload;
+            if (!GetTxPayload(tx, payload)) {
+                return false;
+            }
+            if (pdomaindb) {
+                pdomaindb->EraseCommitment(payload.hash);
+            }
+            return true;
+        }
         case TRANSACTION_DOMAIN_REGISTER:
         case TRANSACTION_DOMAIN_UPDATE:
         case TRANSACTION_DOMAIN_TRANSFER: {
@@ -229,6 +268,10 @@ bool UndoSpecialTx(const CTransaction &tx, const CBlockIndex *pindex) {
                         if (!undo.prevMetadata.name.empty()) {
                             pdomaindb->WriteDomainData(undo.strDomainName, undo.prevMetadata);
                             pdomaindb->WriteReverseRecord(undo.prevMetadata.owner, undo.strDomainName);
+                        }
+
+                        if (!undo.revealedCommitHash.IsNull()) {
+                            pdomaindb->WriteCommitment(undo.revealedCommitHash, undo.nCommitHeight);
                         }
                     } else {
                         CDomainMetaData currentMeta;

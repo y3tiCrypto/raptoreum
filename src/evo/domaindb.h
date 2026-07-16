@@ -17,13 +17,14 @@ public:
     std::string name;
     CKeyID owner;
     CKeyID resolver;
+    CKeyID manager;                // Delegated manager address (optional)
     uint64_t registered_at = 0;
     uint64_t expires_at = 0;
     std::string ipfs_cid;
     std::string json_metadata;
 
     SERIALIZE_METHODS(CDomainMetaData, obj) {
-        READWRITE(obj.name, obj.owner, obj.resolver, obj.registered_at, obj.expires_at, obj.ipfs_cid, obj.json_metadata);
+        READWRITE(obj.name, obj.owner, obj.resolver, obj.registered_at, obj.expires_at, obj.ipfs_cid, obj.json_metadata, obj.manager);
     }
 };
 
@@ -31,9 +32,11 @@ struct CDomainBlockUndo {
     std::string strDomainName;
     bool fWasNew = false;
     CDomainMetaData prevMetadata;
+    uint256 revealedCommitHash;    // commitment hash spent by this registration
+    int nCommitHeight = 0;         // height of commitment transaction
 
     SERIALIZE_METHODS(CDomainBlockUndo, obj) {
-        READWRITE(obj.strDomainName, obj.fWasNew, obj.prevMetadata);
+        READWRITE(obj.strDomainName, obj.fWasNew, obj.prevMetadata, obj.revealedCommitHash, obj.nCommitHeight);
     }
 };
 
@@ -55,6 +58,11 @@ public:
     bool WriteBlockUndoData(const uint256& blockHash, const std::vector<CDomainBlockUndo>& undoData);
     bool ReadBlockUndoData(const uint256& blockHash, std::vector<CDomainBlockUndo>& undoData);
     bool EraseBlockUndoData(const uint256& blockHash);
+
+    // Commitments storage
+    bool WriteCommitment(const uint256& commitHash, int nHeight);
+    bool ReadCommitment(const uint256& commitHash, int& nHeight);
+    bool EraseCommitment(const uint256& commitHash);
 };
 
 #endif // RAPTOREUM_EVO_DOMAINDB_H

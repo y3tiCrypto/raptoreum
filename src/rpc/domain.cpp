@@ -11,6 +11,7 @@
 #include <evo/domaintx.h>
 #include <util/time.h>
 #include <univalue.h>
+#include <hash.h>
 
 #ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
@@ -31,6 +32,7 @@ static UniValue resolvename(const JSONRPCRequest& request) {
             "  \"name\": \"...\",\n"
             "  \"owner\": \"...\",\n"
             "  \"resolver\": \"...\",\n"
+            "  \"manager\": \"...\",\n"
             "  \"ipfs\": \"...\",\n"
             "  \"records\": { ... },\n"
             "  \"registeredAt\": n,\n"
@@ -62,6 +64,7 @@ static UniValue resolvename(const JSONRPCRequest& request) {
     result.pushKV("name", name);
     result.pushKV("owner", EncodeDestination(meta.owner));
     result.pushKV("resolver", EncodeDestination(meta.resolver));
+    result.pushKV("manager", meta.manager.IsNull() ? "" : EncodeDestination(meta.manager));
     result.pushKV("ipfs", meta.ipfs_cid);
 
     UniValue recordsObj;
@@ -122,19 +125,86 @@ static UniValue reverseresolve(const JSONRPCRequest& request) {
 }
 
 #ifdef ENABLE_WALLET
+static UniValue commitdomain(const JSONRPCRequest& request) {
+    CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+    if (request.fHelp || request.params.size() < 1 || request.params.size() > 3) {
+        throw std::runtime_error(
+            "commitdomain \"hash_or_name\" ( \"owner_address\" \"salt\" )\n"
+            "\nBroadcasts a cryptographically signed domain commitment transaction.\n"
+            "\nArguments:\n"
+            "1. \"hash_or_name\"    (string, required) The commitment hex hash (if 1 parameter) OR domain name (if 3 parameters)\n"
+            "2. \"owner_address\"   (string, optional) Target owner address (only if 3 parameters)\n"
+            "3. \"salt\"            (string, optional) Secret 32-byte salt in hex (only if 3 parameters)\n"
+        );
+    }
+
+    uint256 commitHash;
+    CTxDestination fundDest;
+
+    if (request.params.size() == 1) {
+        commitHash = ParseHashV(request.params[0], "hash");
+        LOCK(pwallet->cs_wallet);
+        CPubKey pubKey;
+        if (!pwallet->GetKeyFromPool(pubKey, false)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Keypool ran out");
+        }
+        fundDest = pubKey.GetID();
+    } else {
+        if (request.params.size() != 3) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Must provide either 1 parameter (hash) or 3 parameters (name, owner, salt)");
+        }
+        std::string name = request.params[0].get_str();
+        CTxDestination dest = DecodeDestination(request.params[1].get_str());
+        if (!IsValidDestination(dest)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid owner address");
+        }
+        const CKeyID* keyID = boost::get<CKeyID>(&dest);
+        if (!keyID) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address does not have key ID");
+        }
+        uint256 salt = ParseHashV(request.params[2], "salt");
+
+        CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
+        ss << name << (*keyID) << salt;
+        commitHash = ss.GetHash();
+        fundDest = dest;
+    }
+
+    CMutableTransaction tx;
+    tx.nVersion = 3;
+    tx.nType = TRANSACTION_DOMAIN_COMMIT;
+
+    CDomainCommitPayload payload;
+    payload.hash = commitHash;
+    payload.nTime = GetTime();
+
+    FundSpecialTx(pwallet, tx, payload, fundDest);
+
+    CDataStream ds(SER_NETWORK, PROTOCOL_VERSION);
+    ds << payload;
+    tx.vExtraPayload.assign(ds.begin(), ds.end());
+
+    return SignAndSendSpecialTx(request, tx);
+}
+
 static UniValue registerdomain(const JSONRPCRequest& request) {
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
         return NullUniValue;
     }
 
-    if (request.fHelp || request.params.size() != 2) {
+    if (request.fHelp || request.params.size() != 3) {
         throw std::runtime_error(
-            "registerdomain \"name\" \"owner_address\"\n"
-            "\nRegisters a new RNS domain name.\n"
+            "registerdomain \"name\" \"owner_address\" \"salt\"\n"
+            "\nRegisters a new RNS domain name revealing a previous commitment.\n"
             "\nArguments:\n"
             "1. \"name\"             (string, required) Domain name (e.g. \"y3ti.rtm\")\n"
             "2. \"owner_address\"    (string, required) Destination owner address\n"
+            "3. \"salt\"             (string, required) Secret 32-byte salt in hex\n"
         );
     }
 
@@ -153,6 +223,8 @@ static UniValue registerdomain(const JSONRPCRequest& request) {
     if (!keyID) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address does not have key ID");
     }
+
+    uint256 salt = ParseHashV(request.params[2], "salt");
 
     // Check collision
     CDomainMetaData meta;
@@ -192,10 +264,12 @@ static UniValue registerdomain(const JSONRPCRequest& request) {
     }
 
     CDomainRegisterPayload payload;
+    payload.nVersion = 2; // Support salt
     payload.strDomainName = name;
     payload.ownerAddress = *keyID;
     payload.nFeePaid = requiredFee;
     payload.nRegistrationTime = GetTime();
+    payload.salt = salt;
 
     // make sure sig fits
     payload.vchSig.resize(65);
@@ -223,15 +297,16 @@ static UniValue updatedomain(const JSONRPCRequest& request) {
         return NullUniValue;
     }
 
-    if (request.fHelp || request.params.size() != 4) {
+    if (request.fHelp || request.params.size() < 4 || request.params.size() > 5) {
         throw std::runtime_error(
-            "updatedomain \"name\" \"resolver_address\" \"ipfs_cid\" \"records_json\"\n"
+            "updatedomain \"name\" \"resolver_address\" \"ipfs_cid\" \"records_json\" ( \"manager_address\" )\n"
             "\nUpdates records for a registered domain.\n"
             "\nArguments:\n"
             "1. \"name\"             (string, required) Domain name\n"
             "2. \"resolver_address\" (string, required) Resolution address\n"
             "3. \"ipfs_cid\"         (string, required) IPFS CID\n"
             "4. \"records_json\"     (string, required) Records metadata in JSON format\n"
+            "5. \"manager_address\"  (string, optional) Delegated manager address to assign/update\n"
         );
     }
 
@@ -264,25 +339,53 @@ static UniValue updatedomain(const JSONRPCRequest& request) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "records_json must be valid JSON");
     }
 
+    CKeyID managerKeyID;
+    if (request.params.size() == 5) {
+        CTxDestination managerDest = DecodeDestination(request.params[4].get_str());
+        if (!IsValidDestination(managerDest)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid manager address");
+        }
+        const CKeyID* mKeyID = boost::get<CKeyID>(&managerDest);
+        if (!mKeyID) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Manager address does not have key ID");
+        }
+        managerKeyID = *mKeyID;
+    } else {
+        managerKeyID = meta.manager; // keep previous if not specified
+    }
+
     CMutableTransaction tx;
     tx.nVersion = 3;
     tx.nType = TRANSACTION_DOMAIN_UPDATE;
 
     CDomainUpdatePayload payload;
+    payload.nVersion = 2; // version 2 to support managerAddress
     payload.strDomainName = name;
     payload.primaryAddress = *resolverKeyID;
     payload.strIpfsCid = ipfsCid;
     payload.strJsonMetadata = recordsJson;
+    payload.managerAddress = managerKeyID;
     payload.txidPrev = uint256(); // can be extended to track history if needed
 
     payload.vchSig.resize(65);
 
-    FundSpecialTx(pwallet, tx, payload, meta.owner);
-
     CKey key;
-    if (!pwallet->GetKey(meta.owner, key)) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Private key for domain owner not found in wallet");
+    CKeyID signerKeyID;
+    bool hasKey = false;
+
+    if (pwallet->GetKey(meta.owner, key)) {
+        signerKeyID = meta.owner;
+        hasKey = true;
+    } else if (!meta.manager.IsNull() && pwallet->GetKey(meta.manager, key)) {
+        signerKeyID = meta.manager;
+        hasKey = true;
     }
+
+    if (!hasKey) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Private key for domain owner or manager not found in wallet");
+    }
+
+    FundSpecialTx(pwallet, tx, payload, signerKeyID);
 
     SignSpecialTxPayloadByString(tx, payload, key);
 
@@ -361,8 +464,9 @@ static const CRPCCommand commands[] = {
     {"domain", "resolvename", &resolvename, {"name", "type"}},
     {"domain", "reverseresolve", &reverseresolve, {"address"}},
 #ifdef ENABLE_WALLET
-    {"domain", "registerdomain", &registerdomain, {"name", "owner_address"}},
-    {"domain", "updatedomain", &updatedomain, {"name", "resolver_address", "ipfs_cid", "records_json"}},
+    {"domain", "commitdomain", &commitdomain, {"hash_or_name", "owner_address", "salt"}},
+    {"domain", "registerdomain", &registerdomain, {"name", "owner_address", "salt"}},
+    {"domain", "updatedomain", &updatedomain, {"name", "resolver_address", "ipfs_cid", "records_json", "manager_address"}},
     {"domain", "transferdomain", &transferdomain, {"name", "new_owner_address"}},
 #endif // ENABLE_WALLET
 };

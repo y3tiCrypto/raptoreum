@@ -14,11 +14,13 @@ class CBlockIndex;
 
 bool IsDomainNameValid(const std::string& fullName, std::string& label, std::string& tld);
 
+bool CheckDomainCommitTx(const CTransaction& tx, const CBlockIndex* pindexPrev, CValidationState& state);
 bool CheckDomainRegisterTx(const CTransaction& tx, const CBlockIndex* pindexPrev, CValidationState& state);
 bool CheckDomainUpdateTx(const CTransaction& tx, const CBlockIndex* pindexPrev, CValidationState& state);
 bool CheckDomainTransferTx(const CTransaction& tx, const CBlockIndex* pindexPrev, CValidationState& state);
 
 std::string GetRNSDevAddress();
 std::string GetRNSDonationAddress();
+std::string GetRNSBurnAddress();
 
 #endif // RAPTOREUM_EVO_DOMAINTX_H

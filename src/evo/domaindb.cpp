@@ -43,3 +43,15 @@ bool CDomainDB::ReadBlockUndoData(const uint256& blockHash, std::vector<CDomainB
 bool CDomainDB::EraseBlockUndoData(const uint256& blockHash) {
     return Erase(std::make_pair('u', blockHash));
 }
+
+bool CDomainDB::WriteCommitment(const uint256& commitHash, int nHeight) {
+    return Write(std::make_pair('c', commitHash), nHeight);
+}
+
+bool CDomainDB::ReadCommitment(const uint256& commitHash, int& nHeight) {
+    return Read(std::make_pair('c', commitHash), nHeight);
+}
+
+bool CDomainDB::EraseCommitment(const uint256& commitHash) {
+    return Erase(std::make_pair('c', commitHash));
+}

@@ -27,7 +27,8 @@ enum {
     TRANSACTION_MINT_ASSET = 10,
     TRANSACTION_DOMAIN_REGISTER = 11,
     TRANSACTION_DOMAIN_UPDATE = 12,
-    TRANSACTION_DOMAIN_TRANSFER = 13
+    TRANSACTION_DOMAIN_TRANSFER = 13,
+    TRANSACTION_DOMAIN_COMMIT = 14
 };
 
 /** An outpoint - a combination of a transaction hash and an index n into its vout */

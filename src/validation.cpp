@@ -396,7 +396,8 @@ ContextualCheckTransaction(const CTransaction &tx, CValidationState &state, cons
                 tx.nType != TRANSACTION_MINT_ASSET &&
                 tx.nType != TRANSACTION_DOMAIN_REGISTER &&
                 tx.nType != TRANSACTION_DOMAIN_UPDATE &&
-                tx.nType != TRANSACTION_DOMAIN_TRANSFER) {
+                tx.nType != TRANSACTION_DOMAIN_TRANSFER &&
+                tx.nType != TRANSACTION_DOMAIN_COMMIT) {
                 return state.DoS(100, false, REJECT_INVALID, "bad-txns-type");
             }
             if (tx.IsCoinBase() && tx.nType != TRANSACTION_COINBASE)

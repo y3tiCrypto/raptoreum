@@ -282,6 +282,13 @@ void TxToJSON(const CTransaction &tx, const uint256 hashBlock, UniValue &entry) 
             ctx.ToJson(obj);
             entry.push_back(Pair("domainTransferTx", obj));
         }
+    } else if (tx.nType == TRANSACTION_DOMAIN_COMMIT) {
+        CDomainCommitPayload ctx;
+        if (GetTxPayload(tx, ctx)) {
+            UniValue obj;
+            ctx.ToJson(obj);
+            entry.push_back(Pair("domainCommitTx", obj));
+        }
     }
 
     if (!hashBlock.IsNull())

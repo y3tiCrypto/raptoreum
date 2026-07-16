@@ -11,6 +11,8 @@
 #include <chainparams.h>
 #include <key_io.h>
 #include <util/time.h>
+#include <hash.h>
+#include <univalue.h>
 
 std::string GetRNSDevAddress() {
     std::string net = Params().NetworkIDString();
@@ -34,6 +36,17 @@ std::string GetRNSDonationAddress() {
     }
 }
 
+std::string GetRNSBurnAddress() {
+    std::string net = Params().NetworkIDString();
+    if (net == "main") {
+        return "RBurnAddressxxxxxxxxxxxxxxxxxxxxxxxxx";
+    } else if (net == "test") {
+        return "yBurnAddressxxxxxxxxxxxxxxxxxxxxxxxxx";
+    } else {
+        return "yaackz5YDLnFuuX6gGzEs9EMRQGfqmNYjc";
+    }
+}
+
 bool IsDomainNameValid(const std::string& fullName, std::string& label, std::string& tld) {
     size_t lastDot = fullName.find_last_of('.');
     if (lastDot == std::string::npos) return false;
@@ -52,14 +65,31 @@ bool IsDomainNameValid(const std::string& fullName, std::string& label, std::str
     return true;
 }
 
+bool CheckDomainCommitTx(const CTransaction& tx, const CBlockIndex* pindexPrev, CValidationState& state) {
+    CDomainCommitPayload payload;
+    if (!GetTxPayload(tx, payload)) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-domain-commit-payload");
+    }
+
+    if (payload.nVersion == 0 || payload.nVersion > CDomainCommitPayload::CURRENT_VERSION) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-domain-commit-version");
+    }
+
+    if (payload.hash.IsNull()) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-domain-commit-hash");
+    }
+
+    return true;
+}
+
 bool CheckDomainRegisterTx(const CTransaction& tx, const CBlockIndex* pindexPrev, CValidationState& state) {
     CDomainRegisterPayload payload;
     if (!GetTxPayload(tx, payload)) {
         return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-payload");
     }
 
-    if (payload.nVersion == 0 || payload.nVersion > CDomainRegisterPayload::CURRENT_VERSION) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-version");
+    if (payload.nVersion < 2 || payload.nVersion > CDomainRegisterPayload::CURRENT_VERSION) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-version-upgrade-required");
     }
 
     std::string label, tld;
@@ -136,6 +166,24 @@ bool CheckDomainRegisterTx(const CTransaction& tx, const CBlockIndex* pindexPrev
         }
     }
 
+    // Cryptographic commit-reveal verification
+    CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
+    ss << payload.strDomainName << payload.ownerAddress << payload.salt;
+    uint256 commitHash = ss.GetHash();
+
+    int nCommitHeight = 0;
+    if (!pdomaindb || !pdomaindb->ReadCommitment(commitHash, nCommitHeight)) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-no-commitment");
+    }
+
+    int nRegisterHeight = pindexPrev ? pindexPrev->nHeight + 1 : 1;
+    if (nRegisterHeight - nCommitHeight < 5) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-commitment-too-recent");
+    }
+    if (nRegisterHeight - nCommitHeight > 100) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-domain-register-commitment-too-old");
+    }
+
     return true;
 }
 
@@ -160,10 +208,41 @@ bool CheckDomainUpdateTx(const CTransaction& tx, const CBlockIndex* pindexPrev, 
         return state.DoS(100, false, REJECT_INVALID, "bad-domain-update-expired");
     }
 
-    // Verify signature of the CURRENT owner (meta.owner)
+    // Verify signature of the CURRENT owner (meta.owner) OR delegated manager (meta.manager)
     std::string strError;
-    if (!CMessageSigner::VerifyMessage(meta.owner, payload.vchSig, payload.MakeSignString(), strError)) {
+    bool ownerSigned = CMessageSigner::VerifyMessage(meta.owner, payload.vchSig, payload.MakeSignString(), strError);
+    bool managerSigned = false;
+
+    if (!ownerSigned && !meta.manager.IsNull()) {
+        managerSigned = CMessageSigner::VerifyMessage(meta.manager, payload.vchSig, payload.MakeSignString(), strError);
+    }
+
+    if (!ownerSigned && !managerSigned) {
         return state.DoS(100, false, REJECT_INVALID, "bad-domain-update-sig", false, strError);
+    }
+
+    // If signed by manager (and not owner)
+    if (managerSigned && !ownerSigned) {
+        // Prevent changing manager address
+        if (payload.nVersion >= 2 && payload.managerAddress != meta.manager) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-domain-update-manager-unauthorized-manager-change");
+        }
+        // Prevent setting resolver to burn address
+        CScript burnScript = GetScriptForDestination(DecodeDestination(GetRNSBurnAddress()));
+        CScript payloadScript = GetScriptForDestination(DecodeDestination(EncodeDestination(payload.primaryAddress)));
+        if (payloadScript == burnScript) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-domain-update-manager-unauthorized-burn");
+        }
+        // Prevent setting status to suspended / revoked / inactive in json metadata
+        UniValue metaObj;
+        if (metaObj.read(payload.strJsonMetadata)) {
+            if (metaObj.exists("status")) {
+                std::string statusVal = metaObj["status"].getValStr();
+                if (statusVal == "suspended" || statusVal == "revoked" || statusVal == "inactive") {
+                    return state.DoS(100, false, REJECT_INVALID, "bad-domain-update-manager-unauthorized-suspension");
+                }
+            }
+        }
     }
 
     return true;
@@ -190,7 +269,7 @@ bool CheckDomainTransferTx(const CTransaction& tx, const CBlockIndex* pindexPrev
         return state.DoS(100, false, REJECT_INVALID, "bad-domain-transfer-expired");
     }
 
-    // Verify signature of the CURRENT owner (meta.owner)
+    // Verify signature of the CURRENT owner (meta.owner) ONLY
     std::string strError;
     if (!CMessageSigner::VerifyMessage(meta.owner, payload.vchSig, payload.MakeSignString(), strError)) {
         return state.DoS(100, false, REJECT_INVALID, "bad-domain-transfer-sig", false, strError);
