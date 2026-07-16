@@ -48,7 +48,7 @@ RNS is powered by three main components:
     *   `c_[commit_hash]`: Stores commitment hashes and the block height where they were mined.
     *   `u_[block_hash]`: Stores block-undo logs (`CDomainBlockUndo`) to support correct state transitions during block disconnects (network reorganizations).
 3.  **Consensus Verification Rules**:
-    *   **Length-Based Fees**: Enforces registration fee brackets (1-3 chars = 2000 RTM, 4 chars = 1000 RTM, 5+ chars = 100 RTM).
+    *   **Length-Based Fees**: Enforces registration fee brackets based on domain name character length.
     *   **50/50 Fee Split**: Consensus verifies that 50% of the registration fee goes to the Developer address and 50% goes to the Donation address (pre-configured per network).
     *   **Mempool Conflict Mapping**: Employs `mapDomainsToHash` in the transaction mempool to prevent concurrent duplicate registration broadcasts.
     *   **NFA Collision Blocking**: Prevents hijacking of existing Non-Fungible Assets (NFAs). If an asset exists on-chain with the same name, RNS registration is rejected by consensus unless signed by the NFA's owner.
