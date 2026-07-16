@@ -15,10 +15,32 @@ A)	The deployment of a unique asset layer.
 B)	The option to lock X amount of coins or assets into a special transaction. Coins are unlocked at a block number of choice or timestamp.
 C)	Trustless on chain transfers of assets and native coins VIA Smart Contracts.
 D)	Integrating, developing and deploying a VM protocol that would allow for smart contracts in 4 major programming languages as opposed to the situation with Ethereum being limited to solidity.
+E)  Raptoreum Name Service (RNS) — a native on-chain name resolution protocol with built-in commit-reveal front-running protection, owner/manager role delegation, and on-the-fly resolution in the QT Wallet.
 
 These additional features open up the power and ease of use of Raptoreum’s features to a greater variety of industries under the Distributed Application umbrella. DAPP's are a critical part of driving widespread adoption as recently seen with DEFI and Raptoreum hopes to help provide further alternatives and possibilities for DAPP developers particularly in the field of opening up new programming languages for DAPP and contract development.
 
 It is one of our goals to not only innovate ideas for Raptoreum but to contribute back to the general crypto community with open-source features that anybody can use to help their Blockchain projects succeed.
+
+
+Raptoreum Name Service (RNS)
+----------------------------
+
+RNS is integrated natively at the consensus protocol layer. It registers, stores, and resolves human-readable names (e.g. `y3ti.rtm`) to Raptoreum base58 addresses.
+
+### RNS Key Features
+*   **Commit-Reveal Registration**: Prevents mempool front-running (sniping) of registrations using a two-step cryptographic commitment process (`commitdomain` -> wait 5 blocks -> `registerdomain`).
+*   **Owner / Manager Separation**: Allows owners to delegate updating rights to a manager key. Managers can update resolution addresses, subdomains, and IPFS CIDs, but cannot transfer ownership, assign new managers, or revoke/suspend domains.
+*   **NFA Collision Blocking**: Prevents hijacking of existing Non-Fungible Assets (NFAs). If an asset exists on-chain with the same name, only the NFA owner can register it as an RNS domain.
+*   **Consensus-Enforced Fee Split**: Distributes registration fees dynamically (50% to developer fund, 50% to donation address).
+*   **QT Wallet Integration**: Allows entering domain names directly in the wallet's send screens (resolved transparently on-the-fly).
+
+### Core RPC Commands
+*   `resolvename "name" ( "type" )`: Resolves an RNS domain name to its address and metadata.
+*   `reverseresolve "address"`: Reverse-lookup to find the primary domain assigned to an address.
+*   `commitdomain "hash_or_name" ( "owner_address" "salt" )`: Submits a cryptographic commitment to reserve a domain name.
+*   `registerdomain "name" "owner_address" "salt"`: Reveals a salt to complete registration (5-100 blocks after commit).
+*   `updatedomain "name" "resolver_address" "ipfs_cid" "records_json" ( "manager_address" )`: Updates resolver and metadata.
+*   `transferdomain "name" "new_owner_address"`: Transfers domain ownership and clears the manager address.
 
 
 License
