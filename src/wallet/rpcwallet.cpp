@@ -1781,6 +1781,120 @@ UniValue listtransactions(const JSONRPCRequest &request) {
     return ret;
 }
 
+UniValue listassettransactions(const JSONRPCRequest &request) {
+    RPCHelpMan{"listassettransactions",
+               "\nReturns up to 'count' most recent asset transactions skipping the first 'from' transactions.\n",
+               {
+                       {"asset", RPCArg::Type::STR, RPCArg::Optional::OMITTED_NAMED_ARG,
+                        "If set, should be a valid asset name to return only transactions for the specified asset.\n"
+                        "Use \"*\" or omit to return transactions for all assets."},
+                       {"count", RPCArg::Type::NUM, /* default */ "10", "The number of transactions to return"},
+                       {"skip", RPCArg::Type::NUM, /* default */ "0", "The number of transactions to skip"},
+                       {"include_watchonly", RPCArg::Type::BOOL, /* default */ "false",
+                        "Include transactions to watch-only addresses (see 'importaddress')"},
+               },
+               RPCResult{
+                       RPCResult::Type::ARR, "", "",
+                       {
+                               {RPCResult::Type::OBJ, "", "",
+                               {
+                                    { RPCResult::Type::BOOL, "involvesWatchonly", "Only returns true if imported addresses were involved in transaction" },
+                                    { RPCResult::Type::STR, "address", "The raptoreum address of the transaction." },
+                                    { RPCResult::Type::STR, "category", "The transaction category ('send' or 'receive')." },
+                                    { RPCResult::Type::STR, "asset_id", "The asset identifier." },
+                                    { RPCResult::Type::STR_AMOUNT, "amount", "The amount of assets." },
+                                    { RPCResult::Type::NUM, "vout", "The vout index" },
+                                    { RPCResult::Type::NUM, "confirmations", "The number of blockchain confirmations." },
+                                    { RPCResult::Type::STR_HEX, "txid", "The transaction id." },
+                                    { RPCResult::Type::BOOL, "abandoned", "Whether the transaction has been abandoned." },
+                               }}
+                       }
+               },
+               RPCExamples{
+                       "\nList the most recent 10 asset transactions\n"
+                       + HelpExampleCli("listassettransactions", "") +
+                       "\nList transactions for a specific asset\n"
+                       + HelpExampleCli("listassettransactions", "\"MYASSET\"")
+               },
+    }.Check(request);
+
+    std::shared_ptr <CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    if (!wallet) return NullUniValue;
+    CWallet *const pwallet = wallet.get();
+
+    pwallet->BlockUntilSyncedToCurrentChain();
+
+    std::string asset_filter = "*";
+    if (!request.params[0].isNull() && request.params[0].get_str() != "*") {
+        asset_filter = request.params[0].get_str();
+    }
+    int nCount = 10;
+    if (!request.params[1].isNull())
+        nCount = request.params[1].get_int();
+    int nFrom = 0;
+    if (!request.params[2].isNull())
+        nFrom = request.params[2].get_int();
+    isminefilter filter = ISMINE_SPENDABLE;
+    if (!request.params[3].isNull())
+        if (request.params[3].get_bool())
+            filter = filter | ISMINE_WATCH_ONLY;
+
+    if (nCount < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative count");
+    if (nFrom < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative from");
+
+    UniValue ret(UniValue::VARR);
+
+    {
+        LOCK(pwallet->cs_wallet);
+
+        const CWallet::TxItems &txOrdered = pwallet->wtxOrdered;
+
+        // Iterate backwards through all transactions
+        for (CWallet::TxItems::const_reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it) {
+            CWalletTx *const pwtx = (*it).second;
+            UniValue dummyRet(UniValue::VARR);
+            UniValue assetDetails(UniValue::VARR);
+            ListTransactions(pwallet, *pwtx, 0, true, dummyRet, assetDetails, filter, nullptr);
+
+            for (size_t i = 0; i < assetDetails.size(); ++i) {
+                UniValue entry = assetDetails[i];
+                std::string assetIdStr = entry["asset_id"].get_str();
+                size_t bracketPos = assetIdStr.find('[');
+                std::string baseAssetName = (bracketPos != std::string::npos) ? assetIdStr.substr(0, bracketPos) : assetIdStr;
+                
+                if (asset_filter == "*" || baseAssetName == asset_filter) {
+                    ret.push_back(entry);
+                }
+            }
+        }
+    }
+
+    if (nFrom > (int) ret.size())
+        nFrom = ret.size();
+    if ((nFrom + nCount) > (int) ret.size())
+        nCount = ret.size() - nFrom;
+
+    std::vector <UniValue> arrTmp = ret.getValues();
+
+    std::vector<UniValue>::iterator first = arrTmp.begin();
+    std::advance(first, nFrom);
+    std::vector<UniValue>::iterator last = arrTmp.begin();
+    std::advance(last, nFrom + nCount);
+
+    if (last != arrTmp.end()) arrTmp.erase(last, arrTmp.end());
+    if (first != arrTmp.begin()) arrTmp.erase(arrTmp.begin(), first);
+
+    std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+
+    ret.clear();
+    ret.setArray();
+    ret.push_backV(arrTmp);
+
+    return ret;
+}
+
 UniValue listsinceblock(const JSONRPCRequest &request) {
     RPCHelpMan{"listsinceblock",
                "\nGet all transactions in blocks since block [blockhash], or all transactions if omitted.\n"
@@ -4101,6 +4215,7 @@ static const CRPCCommand commands[] =
                 {"wallet",          "listreceivedbylabel",          &listreceivedbylabel,          {"minconf",        "addlocked",            "include_empty",     "include_watchonly"}},
                 {"wallet",          "listsinceblock",               &listsinceblock,               {"blockhash",      "target_confirmations", "include_watchonly", "include_removed"}},
                 {"wallet",          "listtransactions",             &listtransactions,             {"label|dummy",    "count",                "skip",              "include_watchonly"}},
+                {"wallet",          "listassettransactions",        &listassettransactions,        {"asset",          "count",                "skip",              "include_watchonly"}},
                 {"wallet",          "listunspent",                  &listunspent,                  {"minconf",        "maxconf",              "addresses",         "include_unsafe",    "query_options"}},
                 {"wallet",          "listwalletdir",                &listwalletdir,                {}},
                 {"wallet",          "listwallets",                  &listwallets,                  {}},

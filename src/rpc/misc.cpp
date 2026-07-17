@@ -914,7 +914,9 @@ UniValue getaddressdeltas(const JSONRPCRequest &request) {
                                 {"address", RPCArg::Type::STR, /* default */ "", "The base58check encoded address"},
                         },
                     },
-                    {"asset", RPCArg::Type::STR, /* default */ "RTM", "Get all changes for a particular asset instead of RTM.",}
+                    {"asset", RPCArg::Type::STR, /* default */ "RTM", "Get all changes for a particular asset instead of RTM.",},
+                    {"limit", RPCArg::Type::NUM, /* default */ "0", "Limit the number of returned deltas (0 for unlimited).",},
+                    {"offset", RPCArg::Type::NUM, /* default */ "0", "Number of deltas to skip.",}
 
                },
                RPCResult{
@@ -956,12 +958,31 @@ UniValue getaddressdeltas(const JSONRPCRequest &request) {
 
     int start = 0;
     int end = 0;
+    int limit = 0;
+    int offset = 0;
 
     if (startValue.isNum() && endValue.isNum()) {
         start = startValue.get_int();
         end = endValue.get_int();
         if (end < start) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "End value is expected to be greater than start");
+        }
+    }
+
+    if (request.params[0].isObject()) {
+        UniValue limitValue = find_value(request.params[0].get_obj(), "limit");
+        if (limitValue.isNum()) {
+            limit = limitValue.get_int();
+            if (limit < 0) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Limit must be non-negative");
+            }
+        }
+        UniValue offsetValue = find_value(request.params[0].get_obj(), "offset");
+        if (offsetValue.isNum()) {
+            offset = offsetValue.get_int();
+            if (offset < 0) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Offset must be non-negative");
+            }
         }
     }
 
@@ -988,11 +1009,23 @@ UniValue getaddressdeltas(const JSONRPCRequest &request) {
 
     UniValue result(UniValue::VARR);
 
+    int skipped = 0;
+    int added = 0;
+
     for (std::vector < std::pair < CAddressIndexKey, CAmount > > ::const_iterator it = addressIndex.begin(); it !=
                                                                                                              addressIndex.end();
     it++) {
         if (it->first.asset != assetId && assetId != "*")
             continue;
+
+        if (offset > 0 && skipped < offset) {
+            skipped++;
+            continue;
+        }
+
+        if (limit > 0 && added >= limit) {
+            break;
+        }
 
         std::string address;
         if (!getAddressFromIndex(it->first.type, it->first.hashBytes, address)) {
@@ -1025,6 +1058,7 @@ UniValue getaddressdeltas(const JSONRPCRequest &request) {
 
         delta.pushKV("address", address);
         result.push_back(delta);
+        added++;
     }
 
     return result;
