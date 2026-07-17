@@ -115,6 +115,16 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/thread.hpp>
 
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
+#include <boost/beast/ssl.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/stream.hpp>
+#include <boost/asio/connect.hpp>
+#include <fstream>
+#include <sstream>
+
 #if ENABLE_ZMQ
 #include <zmq/zmqabstractnotifier.h>
 #include <zmq/zmqnotificationinterface.h>
@@ -2105,6 +2115,76 @@ bool AppInitMain(const util::Ref &context, NodeContext &node, interfaces::BlockA
         return InitError(_("Failed to load sporks cache from") + "\n" + (GetDataDir() / "sporks.dat").string());
     }
 
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace net = boost::asio;
+namespace ssl = net::ssl;
+using tcp = net::ip::tcp;
+
+static bool DownloadPowCache(const std::string& networkName, const fs::path& destPath) {
+    try {
+        std::string host = "bootstrap.raptoreum.com";
+        std::string port = "443";
+        std::string target = "/powcache-" + networkName + ".dat";
+
+        net::io_context ioc;
+        ssl::context ctx{ssl::context::tlsv12_client};
+        ctx.set_options(
+            ssl::context::default_workarounds |
+            ssl::context::no_sslv3 |
+            ssl::context::no_tlsv1 |
+            ssl::context::no_tlsv1_1 |
+            ssl::context::single_dh_use
+        );
+
+        tcp::resolver resolver{ioc};
+        beast::ssl_stream<beast::tcp_stream> stream{ioc, ctx};
+
+        if (!SSL_set_tlsext_host_name(stream.native_handle(), host.c_str())) {
+            LogPrintf("DownloadPowCache: SSL_set_tlsext_host_name failed\n");
+            return false;
+        }
+
+        auto const results = resolver.resolve(host, port);
+        beast::get_lowest_layer(stream).connect(results);
+        stream.handshake(ssl::stream_base::client);
+
+        http::request<http::empty_body> req{http::verb::get, target, 11};
+        req.set(http::field::host, host);
+        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+        http::write(stream, req);
+
+        beast::flat_buffer buffer;
+        http::response<http::dynamic_body> res;
+        http::read(stream, buffer, res);
+
+        if (res.result() != http::status::ok) {
+            LogPrintf("DownloadPowCache: HTTP GET returned error status %d\n", res.result_int());
+            return false;
+        }
+
+        std::ofstream outfile(destPath.string(), std::ios::binary);
+        if (!outfile.is_open()) {
+            LogPrintf("DownloadPowCache: Failed to open destination path %s for writing\n", destPath.string());
+            return false;
+        }
+
+        std::string body_data = beast::buffers_to_string(res.body().data());
+        outfile.write(body_data.data(), body_data.size());
+        outfile.close();
+
+        beast::error_code ec;
+        stream.shutdown(ec);
+
+        LogPrintf("DownloadPowCache: Successfully downloaded powcache to %s\n", destPath.string());
+        return true;
+    } catch (const std::exception& e) {
+        LogPrintf("DownloadPowCache: Exception occurred: %s\n", e.what());
+        return false;
+    }
+}
+
     // ********************************************************* Step 7b: load powcache.dat
     {
         fs::path pathDB = GetDataDir();
@@ -2115,7 +2195,12 @@ bool AppInitMain(const util::Ref &context, NodeContext &node, interfaces::BlockA
         uiInterface.InitMessage(_("Loading POW cache..."));
         fs::path powCacheFile = pathDB / strDBName;
         if (!fs::exists(powCacheFile)) {
-            uiInterface.InitMessage("Loading POW cache for the first time. This could take a minute...");
+            uiInterface.InitMessage("Downloading POW cache bootstrap...");
+            if (DownloadPowCache(Params().NetworkIDString(), powCacheFile)) {
+                uiInterface.InitMessage("POW cache downloaded successfully.");
+            } else {
+                uiInterface.InitMessage("Loading POW cache for the first time. This could take a minute...");
+            }
         }
 
         CFlatDB <CPowCache> flatdb7(strDBName, "powCache");

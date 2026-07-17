@@ -14,6 +14,10 @@ Run the following commands to install required packages:
 ```bash
 $ sudo apt-get install curl build-essential libtool autotools-dev automake pkg-config python3 bsdmainutils bison
 ```
+If you want to build the Graphical User Interface (Qt5 / GUI) using the `depends` system, you must also install the following packages on the host for font, keyboard, and graphics configuration support:
+```bash
+$ sudo apt-get install libfontconfig1-dev libfreetype6-dev libxcb-randr0-dev libxcb-xtest0-dev libxcb-xinerama0-dev libxcb-shape0-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev
+```
 
 ##### Fedora:
 ```bash
