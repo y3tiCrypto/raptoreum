@@ -79,7 +79,7 @@ ConstructTransaction(const UniValue &inputs_in, const UniValue &outputs_in, cons
         rawTx.vin.push_back(in);
     }
 
-    std::set <CTxDestination> destinations;
+    std::set<std::pair<CTxDestination, std::string>> destinations;
     bool hasFuture = false;
     CFutureTx ftx;
     if (!outputs_is_obj) {
@@ -111,10 +111,7 @@ ConstructTransaction(const UniValue &inputs_in, const UniValue &outputs_in, cons
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Raptoreum address: ") + name_);
             }
 
-            if (!destinations.insert(destination).second) {
-                throw JSONRPCError(RPC_INVALID_PARAMETER,
-                                   std::string("Invalid parameter, duplicated address: ") + name_);
-            }
+
 
             CScript scriptPubKey = GetScriptForDestination(destination);
             UniValue sendToValue = outputs[name_];
@@ -164,6 +161,13 @@ ConstructTransaction(const UniValue &inputs_in, const UniValue &outputs_in, cons
             } else {
                 nAmount = AmountFromValue(sendToValue);
             }
+
+            std::pair<CTxDestination, std::string> dest_key = {destination, hasasset ? assetId : ""};
+            if (!destinations.insert(dest_key).second) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   std::string("Invalid parameter, duplicated address: ") + name_);
+            }
+
             if (hasasset) {
                 // get asset metadadta
                 CAssetMetaData tmpasset;

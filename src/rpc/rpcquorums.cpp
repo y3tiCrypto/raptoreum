@@ -87,7 +87,7 @@ void quorum_info_help(const JSONRPCRequest &request) {
     RPCHelpMan{"quorum info",
                "Return information about a quorum\n",
                {
-                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLMQ type."},
+                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLSQ type."},
                        {"quorumHash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Block hash of quorum."},
                        {"includeSkShare", RPCArg::Type::BOOL, /* default */ "", "Include secret key share in output."},
                },
@@ -136,7 +136,7 @@ UniValue quorum_info(const JSONRPCRequest &request) {
 
     Consensus::LLMQType llmqType = (Consensus::LLMQType) ParseInt32V(request.params[0], "llmqType");
     if (!Params().GetConsensus().llmqs.count(llmqType)) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "invalid LLMQ type");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "invalid LLSQ type");
     }
 
     uint256 quorumHash = ParseHashV(request.params[1], "quorumHash");
@@ -301,7 +301,7 @@ void quorum_sign_help(const JSONRPCRequest &request) {
     RPCHelpMan{"quorum sign",
                "Threshold-sign a message\n",
                {
-                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLMQ type."},
+                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLSQ type."},
                        {"id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Request id."},
                        {"msgHash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Message hash."},
                        {"quorumHash", RPCArg::Type::STR_HEX, /* default */ "", "The quorum identifier."},
@@ -318,7 +318,7 @@ void quorum_verify_help(const JSONRPCRequest &request) {
     RPCHelpMan{"quorum verify",
                "Test if a quorum signature is valid for a request id and a message hash\n",
                {
-                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLMQ type."},
+                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLSQ type."},
                        {"id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Request id."},
                        {"msgHash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Message hash."},
                        {"signature", RPCArg::Type::STR, RPCArg::Optional::NO, "Quorum signature to verify."},
@@ -338,7 +338,7 @@ void quorum_hasrecsig_help(const JSONRPCRequest &request) {
     RPCHelpMan{"quorum hasrecsig",
                "Test if a valid recovered signature is present\n",
                {
-                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLMQ type."},
+                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLSQ type."},
                        {"id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Request id."},
                        {"msgHash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Message hash."},
                },
@@ -351,7 +351,7 @@ void quorum_getrecsig_help(const JSONRPCRequest &request) {
     RPCHelpMan{"quorum getrecsig",
                "Get a recovered signature\n",
                {
-                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLMQ type."},
+                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLSQ type."},
                        {"id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Request id."},
                        {"msgHash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Message hash."},
                },
@@ -364,7 +364,7 @@ void quorum_isconflicting_help(const JSONRPCRequest &request) {
     RPCHelpMan{"quorum isconflicting",
                "Test if a conflict exists\n",
                {
-                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLMQ type."},
+                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLSQ type."},
                        {"id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Request id."},
                        {"msgHash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Message hash."},
                },
@@ -394,7 +394,7 @@ UniValue quorum_sigs_cmd(const JSONRPCRequest &request) {
 
     Consensus::LLMQType llmqType = (Consensus::LLMQType) ParseInt32V(request.params[0], "llmqType");
     if (!Params().GetConsensus().llmqs.count(llmqType)) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "invalid LLMQ type");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "invalid LLSQ type");
     }
 
     uint256 id = ParseHashV(request.params[1], "id");
@@ -491,7 +491,7 @@ void quorum_selectquorum_help(const JSONRPCRequest &request) {
     RPCHelpMan{"quorum selectquorum",
                "Returns the quorum that would/should sign a request\n",
                {
-                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLMQ type."},
+                       {"llmqType", RPCArg::Type::NUM, RPCArg::Optional::NO, "LLSQ type."},
                        {"id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Request id."},
                },
                RPCResults{},
@@ -504,7 +504,7 @@ UniValue quorum_selectquorum(const JSONRPCRequest &request) {
 
     Consensus::LLMQType llmqType = (Consensus::LLMQType) ParseInt32V(request.params[0], "llmqType");
     if (!Params().GetConsensus().llmqs.count(llmqType)) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "invalid LLMQ type");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "invalid LLSQ type");
     }
 
     uint256 id = ParseHashV(request.params[1], "id");
@@ -571,7 +571,7 @@ void quorum_getdata_help(const JSONRPCRequest &request) {
                         "2 - Request encrypted contributions for member defined by \"proTxHash\". \"proTxHash\" must be specified if this option is used.\n"
                         "3 - Request both, 1 and 2"},
                        {"proTxHash", RPCArg::Type::STR_HEX, /* default */ "",
-                        "The proTxHash the contributions will be requested for. Must be member of the specified LLMQ."},
+                        "The proTxHash the contributions will be requested for. Must be member of the specified LLSQ."},
                },
                RPCResults{},
                RPCExamples{""},
@@ -612,7 +612,7 @@ UniValue quorum_getdata(const JSONRPCRequest &request) {
 [[noreturn]] void quorum_help() {
     throw std::runtime_error(
             RPCHelpMan{"quorum",
-                       "Set of commands for quorums/LLMQs.\n"
+                       "Set of commands for quorums/LLSQs.\n"
                        "To get help on individual commands, use \"help quorum command\".\n"
                        "\nAvailable commands:\n"
                        "  list              - List of on-chain quorums\n"

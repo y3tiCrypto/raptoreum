@@ -28,6 +28,10 @@
 #include <util/validation.h>
 #include <util/vector.h>
 #include <validation.h>
+
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
 #include <wallet/coincontrol.h>
 #include <wallet/context.h>
 #include <wallet/load.h>
@@ -1778,6 +1782,10 @@ UniValue listtransactions(const JSONRPCRequest &request) {
     ret.setArray();
     ret.push_backV(arrTmp);
 
+#if defined(__GLIBC__)
+    malloc_trim(0);
+#endif
+
     return ret;
 }
 
@@ -1891,6 +1899,10 @@ UniValue listassettransactions(const JSONRPCRequest &request) {
     ret.clear();
     ret.setArray();
     ret.push_backV(arrTmp);
+
+#if defined(__GLIBC__)
+    malloc_trim(0);
+#endif
 
     return ret;
 }
