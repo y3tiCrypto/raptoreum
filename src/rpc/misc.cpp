@@ -928,6 +928,7 @@ UniValue getaddressdeltas(const JSONRPCRequest &request) {
                                         {RPCResult::Type::NUM, "index", "The related input or output index"},
                                         {RPCResult::Type::NUM, "blockindex", "The related block index"},
                                         {RPCResult::Type::NUM, "height", "The block height"},
+                                        {RPCResult::Type::NUM, "timestamp", "The block unix timestamp"},
                                         {RPCResult::Type::STR, "address", "The base58check encoded address"},
                                 }},
                        }},
@@ -1012,6 +1013,16 @@ UniValue getaddressdeltas(const JSONRPCRequest &request) {
         delta.pushKV("index", (int) it->first.index);
         delta.pushKV("blockindex", (int) it->first.txindex);
         delta.pushKV("height", it->first.blockHeight);
+
+        CBlockIndex* pindex = nullptr;
+        {
+            LOCK(cs_main);
+            if (it->first.blockHeight >= 0 && it->first.blockHeight <= ::ChainActive().Height()) {
+                pindex = ::ChainActive()[it->first.blockHeight];
+            }
+        }
+        delta.pushKV("timestamp", pindex ? pindex->GetBlockTime() : 0);
+
         delta.pushKV("address", address);
         result.push_back(delta);
     }
