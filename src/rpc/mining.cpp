@@ -14,6 +14,9 @@
 #include <core_io.h>
 #include <key_io.h>
 #include <miner.h>
+#ifdef ENABLE_WALLET
+#include <wallet/rpcwallet.h>
+#endif
 #include <net.h>
 #include <node/context.h>
 #include <policy/fees.h>
@@ -1226,7 +1229,13 @@ UniValue setgenerate(const JSONRPCRequest &request) {
     if (!node.connman)
         throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
 
-    int numCores = GenerateRaptoreums(fGenerate, nGenProcLimit, Params(), node);
+    CWallet* pwallet = nullptr;
+#ifdef ENABLE_WALLET
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    pwallet = wallet.get();
+#endif
+
+    int numCores = GenerateRaptoreums(fGenerate, nGenProcLimit, Params(), node, pwallet);
 
     int nActiveThreads = fGenerate ? (nGenProcLimit >= 0 ? nGenProcLimit : numCores) : 0;
     std::string msg = std::to_string(nActiveThreads) + " of " + std::to_string(numCores);

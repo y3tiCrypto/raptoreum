@@ -550,22 +550,19 @@ static bool ProcessBlockFound(const CBlock *pblock, const CChainParams &chainpar
     return true;
 }
 
-void static RaptoreumMiner(const CChainParams& chainparams, NodeContext& node) {
+void static RaptoreumMiner(const CChainParams& chainparams, NodeContext& node, CWallet* pWalletParam) {
     LogPrintf("RaptoreumMiner -- started\n");
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
     util::ThreadRename("raptoreum-miner");
 
     unsigned int nExtraNonce = 0;
 
-        CWallet * pWallet = NULL;
+        CWallet * pWallet = pWalletParam;
 
     #ifdef ENABLE_WALLET
-        pWallet = GetFirstWallet();
-
-  		  // TODO: either add this function back in, or update this for more appropriate wallet functionality
-        // if (!EnsureWalletIsAvailable(pWallet, false)) {
-        //     LogPrintf("RaptoreumMiner -- Wallet not available\n");
-        // }
+        if (pWallet == NULL) {
+            pWallet = GetFirstWallet();
+        }
     #endif
 
     if (pWallet == NULL)
@@ -704,7 +701,7 @@ void static RaptoreumMiner(const CChainParams& chainparams, NodeContext& node) {
 }
 
 // TODO: add reference node, get the conn man from there
-int GenerateRaptoreums(bool fGenerate, int nThreads, const CChainParams &chainparams, NodeContext &node) {
+int GenerateRaptoreums(bool fGenerate, int nThreads, const CChainParams &chainparams, NodeContext &node, CWallet* pwallet) {
     static boost::thread_group *minerThreads = NULL;
 
     int numCores = GetNumCores();
@@ -730,7 +727,7 @@ int GenerateRaptoreums(bool fGenerate, int nThreads, const CChainParams &chainpa
 
     for (int i = 0; i < nThreads; i++) {
         minerThreads->create_thread(
-                boost::bind(&RaptoreumMiner, boost::cref(chainparams), boost::ref(node)));
+                boost::bind(&RaptoreumMiner, boost::cref(chainparams), boost::ref(node), pwallet));
     }
     return (numCores);
 }
