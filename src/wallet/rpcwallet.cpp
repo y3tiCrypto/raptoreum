@@ -329,7 +329,7 @@ UniValue sendtoaddress(const JSONRPCRequest &request) {
                        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
                         "The amount in " + CURRENCY_UNIT + " to send. eg 0.1"},
                        {"future", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED_NAMED_ARG,
-                        "Future transaction is mature when it has enough confirmations or locktime in seconds has past from its first confirm.",
+                        "Future transaction is mature when it has enough confirmations or locktime in seconds has passed since its first confirmation.",
                         {
                                 {"future_maturity", RPCArg::Type::NUM, /* default */ "",
                                  "Number of confirmations required for this future to mature."},
@@ -346,7 +346,7 @@ UniValue sendtoaddress(const JSONRPCRequest &request) {
                         "                             transaction, just kept in your wallet."},
                        {"subtractfeefromamount", RPCArg::Type::BOOL, /* default */ "false",
                         "The fee will be deducted from the amount being sent.\n"
-                        "                             The recipient will receive less amount of RTM than you enter in the amount field."},
+                        "                             The recipient will receive less RTM than you enter in the amount field."},
                        {"use_is", RPCArg::Type::BOOL, /* default */ "false", "Deprecated and ignored"},
                        {"use_cj", RPCArg::Type::BOOL, /* default */ "false", "Use CoinJoin funds only"},
                        {"conf_target", RPCArg::Type::NUM, /* default */ "fallback to wallet's default",
@@ -363,9 +363,9 @@ UniValue sendtoaddress(const JSONRPCRequest &request) {
                RPCExamples{
                        HelpExampleCli("sendtoaddress",   "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\" 0.1")
                        + HelpExampleCli("sendtoaddress", "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\" 0.1 '{\"future_maturity\":100, \"future_locktime\":10000}'")
-                       + HelpExampleCli("sendtoaddress", "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\" 0.1 [] \"donation\" \"seans outpost\"")
-                       + HelpExampleCli("sendtoaddress", "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\" 0.1 [] \"\" \"\" true")
-                       + HelpExampleRpc("sendtoaddress", "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\", 0.1, [], \"donation\", \"seans outpost\"")
+                       + HelpExampleCli("sendtoaddress", "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\" 0.1 null \"donation\" \"seans outpost\"")
+                       + HelpExampleCli("sendtoaddress", "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\" 0.1 null \"\" \"\" true")
+                       + HelpExampleRpc("sendtoaddress", "\"RwnLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPwG\", 0.1, null, \"donation\", \"seans outpost\"")
                },
     }.Check(request);
 
