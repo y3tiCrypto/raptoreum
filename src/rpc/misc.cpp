@@ -47,6 +47,8 @@
 
 #include <univalue.h>
 #include "assets/assets.h"
+#include <bip39.h>
+#include <util/bip32.h>
 #include <assets/assetstype.h>
 
 static UniValue mnsync(const JSONRPCRequest &request) {
@@ -266,6 +268,185 @@ static UniValue createmultisig(const JSONRPCRequest &request) {
 
     return result;
 }
+
+static UniValue generatemultisignaddress(const JSONRPCRequest& request) {
+    if (request.fHelp || request.params.size() > 1) {
+        throw std::runtime_error(
+            "generatemultisignaddress ( params_json_object )\n"
+            "\nCreates a multi-signature address from BIP39 seed words with BIP44 derivation path.\n"
+            "\nArguments:\n"
+            "1. \"params\"              (json object, optional) parameters json object\n"
+            "   {\n"
+            "     \"seed\":             (string, optional) 24-word BIP39 mnemonic seed. Generated if not specified.\n"
+            "     \"pubkey_prefix\":    (numeric, optional) prefix for public addresses.\n"
+            "     \"secret_prefix\":    (numeric, optional) prefix for private keys.\n"
+            "     \"script_prefix\":    (numeric, optional) prefix for script addresses.\n"
+            "     \"ext_pubkey_prefix\": (numeric, optional) prefix for master public keys.\n"
+            "     \"ext_secret_prefix\": (numeric, optional) prefix for master private keys.\n"
+            "     \"parent_bip44_path\": (string, optional, default=\"m/44'/200'/0'/0\") derivation path.\n"
+            "     \"require_num_sign\":  (numeric, optional, default=10) number of required signatures.\n"
+            "     \"total_num_sign\":    (numeric, optional, default=20) number of total signatures.\n"
+            "   }\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"address\": \"multisig_address\",\n"
+            "  \"address_group\": { \"address\": \"wif_private_key\", ... },\n"
+            "  \"redeem_script\": \"redeem_script_hex\",\n"
+            "  \"seed\": \"mnemonic_seed\",\n"
+            "  \"address_path\": { \"address\": \"derivation_path\", ... }\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("generatemultisignaddress", "'{\"require_num_sign\":3,\"total_num_sign\":5}'")
+            + HelpExampleRpc("generatemultisignaddress", "{\"require_num_sign\":3,\"total_num_sign\":5}")
+        );
+    }
+
+    // Default values
+    std::string seed_str = "";
+    std::vector<unsigned char> pubkey_prefix = Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS);
+    std::vector<unsigned char> secret_prefix = Params().Base58Prefix(CChainParams::SECRET_KEY);
+    std::vector<unsigned char> script_prefix = Params().Base58Prefix(CChainParams::SCRIPT_ADDRESS);
+    std::vector<unsigned char> ext_pubkey_prefix = Params().Base58Prefix(CChainParams::EXT_PUBLIC_KEY);
+    std::vector<unsigned char> ext_secret_prefix = Params().Base58Prefix(CChainParams::EXT_SECRET_KEY);
+    std::string parent_bip44_path = "m/44'/200'/0'/0";
+    int require_num_sign = 10;
+    int total_num_sign = 20;
+
+    if (request.params.size() > 0 && request.params[0].isObject()) {
+        UniValue params = request.params[0].get_obj();
+
+        UniValue seed_val = find_value(params, "seed");
+        if (seed_val.isStr()) {
+            seed_str = seed_val.get_str();
+        }
+
+        auto parse_prefix = [](const UniValue& val, std::vector<unsigned char>& out_prefix) {
+            if (val.isNum()) {
+                int p = val.get_int();
+                out_prefix.clear();
+                if (p > 255) {
+                    out_prefix.push_back((p >> 8) & 0xFF);
+                    out_prefix.push_back(p & 0xFF);
+                } else {
+                    out_prefix.push_back(p & 0xFF);
+                }
+            }
+        };
+
+        parse_prefix(find_value(params, "pubkey_prefix"), pubkey_prefix);
+        parse_prefix(find_value(params, "secret_prefix"), secret_prefix);
+        parse_prefix(find_value(params, "script_prefix"), script_prefix);
+        parse_prefix(find_value(params, "ext_pubkey_prefix"), ext_pubkey_prefix);
+        parse_prefix(find_value(params, "ext_secret_prefix"), ext_secret_prefix);
+
+        UniValue path_val = find_value(params, "parent_bip44_path");
+        if (path_val.isStr()) {
+            parent_bip44_path = path_val.get_str();
+        }
+
+        UniValue req_val = find_value(params, "require_num_sign");
+        if (req_val.isNum()) {
+            require_num_sign = req_val.get_int();
+        }
+
+        UniValue total_val = find_value(params, "total_num_sign");
+        if (total_val.isNum()) {
+            total_num_sign = total_val.get_int();
+        }
+    }
+
+    if (total_num_sign < require_num_sign) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "total_num_sign cannot be less than require_num_sign");
+    }
+    if (require_num_sign <= 0 || total_num_sign <= 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "require_num_sign and total_num_sign must be positive integers");
+    }
+
+    // Mnemonic validation/generation
+    if (seed_str.empty()) {
+        seed_str = std::string(CMnemonic::Generate(256).c_str());
+    } else {
+        if (!CMnemonic::Check(SecureString(seed_str))) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid BIP39 mnemonic seed words");
+        }
+    }
+
+    SecureVector vchSeed;
+    CMnemonic::ToSeed(SecureString(seed_str), "", vchSeed);
+
+    CExtKey masterKey;
+    masterKey.SetSeed(vchSeed.data(), vchSeed.size());
+
+    std::vector<uint32_t> parent_path;
+    if (!ParseHDKeypath(parent_bip44_path, parent_path)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parent BIP44 path");
+    }
+
+    CExtKey parentKey = masterKey;
+    for (uint32_t index : parent_path) {
+        if (!parentKey.Derive(parentKey, index)) {
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to derive parent key path");
+        }
+    }
+
+    std::vector<CPubKey> pubkeys;
+    UniValue address_group(UniValue::VOBJ);
+    UniValue address_path(UniValue::VOBJ);
+
+    auto encode_custom_address = [](const CKeyID &id, const std::vector<unsigned char> &prefix) {
+        std::vector<unsigned char> data = prefix;
+        data.insert(data.end(), id.begin(), id.end());
+        return EncodeBase58Check(data);
+    };
+
+    auto encode_custom_secret = [](const CKey &key, const std::vector<unsigned char> &prefix) {
+        assert(key.IsValid());
+        std::vector<unsigned char> data = prefix;
+        data.insert(data.end(), key.begin(), key.end());
+        if (key.IsCompressed()) {
+            data.push_back(1);
+        }
+        std::string ret = EncodeBase58Check(data);
+        memory_cleanse(data.data(), data.size());
+        return ret;
+    };
+
+    for (int x = 0; x < total_num_sign; ++x) {
+        CExtKey childKey;
+        if (!parentKey.Derive(childKey, x)) {
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to derive child key");
+        }
+        CPubKey pubkey = childKey.key.GetPubKey();
+        pubkeys.push_back(pubkey);
+
+        std::string addrStr = encode_custom_address(pubkey.GetID(), pubkey_prefix);
+        std::string secretStr = encode_custom_secret(childKey.key, secret_prefix);
+
+        address_group.pushKV(addrStr, secretStr);
+        address_path.pushKV(addrStr, parent_bip44_path + "/" + std::to_string(x));
+    }
+
+    CScript inner = CreateMultisigRedeemscript(require_num_sign, pubkeys);
+    CScriptID innerID(inner);
+
+    auto encode_custom_script_address = [](const CScriptID &id, const std::vector<unsigned char> &prefix) {
+        std::vector<unsigned char> data = prefix;
+        data.insert(data.end(), id.begin(), id.end());
+        return EncodeBase58Check(data);
+    };
+
+    std::string multisigAddrStr = encode_custom_script_address(innerID, script_prefix);
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("address", multisigAddrStr);
+    result.pushKV("address_group", address_group);
+    result.pushKV("redeem_script", HexStr(inner));
+    result.pushKV("seed", seed_str);
+    result.pushKV("address_path", address_path);
+
+    return result;
+}
+
 
 static UniValue getdescriptorinfo(const JSONRPCRequest &request) {
     RPCHelpMan{"getdescriptorinfo",
@@ -1578,6 +1759,7 @@ static const CRPCCommand commands[] =
                 {"control",      "logging",                &logging,                {"include",    "exclude"}},
                 {"util",         "validateaddress",        &validateaddress,        {"address"}},
                 {"util",         "createmultisig",         &createmultisig,         {"nrequired",  "keys"}},
+                {"util",         "generatemultisignaddress", &generatemultisignaddress, {"params"}},
                 {"util",         "deriveaddresses",        &deriveaddresses,        {"descriptor", "begin",     "end"}},
                 {"util",         "getdescriptorinfo",      &getdescriptorinfo,      {"descriptor"}},
                 {"util",         "verifymessage",          &verifymessage,          {"address",    "signature", "message"}},

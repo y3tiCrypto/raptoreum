@@ -18,6 +18,10 @@
 #include <qt/guiutil.h>
 #include <qt/optionsmodel.h>
 #include <qt/qrdialog.h>
+#include <qt/paperwalletdialog.h>
+#include <key_io.h>
+#include <key.h>
+#include <pubkey.h>
 
 #include <QIcon>
 #include <QMenu>
@@ -112,6 +116,7 @@ AddressBookPage::AddressBookPage(Mode _mode, Tabs _tab, QWidget *parent) :
     QAction *copyLabelAction = new QAction(tr("Copy &Label"), this);
     QAction *editAction = new QAction(tr("&Edit"), this);
     QAction *showAddressQRCodeAction = new QAction(tr("&Show address QR code"), this);
+    QAction *printPaperWalletAction = new QAction(tr("Print &Paper Wallet"), this);
     deleteAction = new QAction(ui->deleteAddress->text(), this);
 
     // Build context menu
@@ -123,6 +128,8 @@ AddressBookPage::AddressBookPage(Mode _mode, Tabs _tab, QWidget *parent) :
         contextMenu->addAction(deleteAction);
     contextMenu->addSeparator();
     contextMenu->addAction(showAddressQRCodeAction);
+    if (tab == ReceivingTab)
+        contextMenu->addAction(printPaperWalletAction);
 
     // Connect signals for context menu actions
     connect(copyAddressAction, &QAction::triggered, this, &AddressBookPage::on_copyAddress_clicked);
@@ -130,6 +137,7 @@ AddressBookPage::AddressBookPage(Mode _mode, Tabs _tab, QWidget *parent) :
     connect(editAction, &QAction::triggered, this, &AddressBookPage::onEditAction);
     connect(deleteAction, &QAction::triggered, this, &AddressBookPage::on_deleteAddress_clicked);
     connect(showAddressQRCodeAction, &QAction::triggered, this, &AddressBookPage::on_showAddressQRCode_clicked);
+    connect(printPaperWalletAction, &QAction::triggered, this, &AddressBookPage::on_printPaperWallet_clicked);
     connect(ui->tableView, &QWidget::customContextMenuRequested, this, &AddressBookPage::contextualMenu);
     connect(ui->closeButton, &QPushButton::clicked, this, &QDialog::accept);
 
@@ -234,6 +242,37 @@ void AddressBookPage::on_showAddressQRCode_clicked() {
 
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setInfo(tr("QR code"), "raptoreum:" + strAddress, "", strAddress);
+    dialog->show();
+}
+
+void AddressBookPage::on_printPaperWallet_clicked() {
+    if (!model) return;
+    QList<QModelIndex> entries = GUIUtil::getEntryData(ui->tableView, AddressTableModel::Address);
+    if (entries.empty()) {
+        return;
+    }
+
+    QString strAddress = entries.at(0).data(Qt::EditRole).toString();
+    QString strLabel = entries.at(0).sibling(entries.at(0).row(), AddressTableModel::Label).data(Qt::EditRole).toString();
+
+    // Retrieve private key
+    CTxDestination dest = DecodeDestination(strAddress.toStdString());
+    const CKeyID* keyid = boost::get<CKeyID>(&dest);
+    if (!keyid) {
+        QMessageBox::critical(this, tr("Error"), tr("Address does not refer to a key."));
+        return;
+    }
+
+    CKey key;
+    if (!model->wallet().getPrivKey(*keyid, key)) {
+        QMessageBox::critical(this, tr("Error"), tr("Private key is not available (is the wallet locked?)."));
+        return;
+    }
+
+    std::string privateKey = EncodeSecret(key);
+
+    PaperWalletDialog *dialog = new PaperWalletDialog(this, strAddress, strLabel, QString::fromStdString(privateKey));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->show();
 }
 

@@ -85,6 +85,9 @@ private
     /** Show QR code for the currently selected address */
     void on_showAddressQRCode_clicked();
 
+    /** Print paper wallet for the currently selected address */
+    void on_printPaperWallet_clicked();
+
     /** Export button clicked */
     void on_exportButton_clicked();
 

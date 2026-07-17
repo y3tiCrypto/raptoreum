@@ -69,6 +69,7 @@ QT_MOC_CPP = \
   qt/moc_openuridialog.cpp \
   qt/moc_optionsdialog.cpp \
   qt/moc_optionsmodel.cpp \
+  qt/moc_paperwalletdialog.cpp \
   qt/moc_overviewpage.cpp \
   qt/moc_peertablemodel.cpp \
   qt/moc_paymentserver.cpp \
@@ -148,6 +149,7 @@ BITCOIN_QT_H = \
   qt/openuridialog.h \
   qt/optionsdialog.h \
   qt/optionsmodel.h \
+  qt/paperwalletdialog.h \
   qt/overviewpage.h \
   qt/paymentserver.h \
   qt/peertablemodel.h \
@@ -280,6 +282,7 @@ BITCOIN_QT_WALLET_CPP = \
   qt/openuridialog.cpp \
   qt/overviewpage.cpp \
   qt/paymentserver.cpp \
+  qt/paperwalletdialog.cpp \
   qt/qrdialog.cpp \
   qt/receivecoinsdialog.cpp \
   qt/receiverequestdialog.cpp \
