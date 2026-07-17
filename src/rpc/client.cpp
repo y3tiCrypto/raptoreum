@@ -237,6 +237,9 @@ static CRPCConvertTable rpcCvtTable;
  * as well as objects and arrays.
  */
 UniValue ParseNonRFCJSONValue(const std::string &strVal) {
+    if (strVal.empty()) {
+        return NullUniValue;
+    }
     UniValue jVal;
     if (!jVal.read(std::string("[") + strVal + std::string("]")) ||
         !jVal.isArray() || jVal.size() != 1)

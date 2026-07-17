@@ -508,11 +508,15 @@ static int CommandLineRPC(int argc, char *argv[]) {
                         UniValue errMsg = find_value(error, "message");
                         strPrint = errCode.isNull() ? "" : "error code: " + errCode.getValStr() + "\n";
 
-                        if (errMsg.isStr())
-                            strPrint += "error message:\n" + errMsg.get_str();
+                        if (errCode.isNum() && errCode.get_int() == RPC_METHOD_NOT_FOUND) {
+                            strPrint = "error: Command \"" + method + "\" not found.\nSee \"raptoreum-cli help\" for available commands.";
+                        } else {
+                            if (errMsg.isStr())
+                                strPrint += "error message:\n" + errMsg.get_str();
 
-                        if (errCode.isNum() && errCode.get_int() == RPC_WALLET_NOT_SPECIFIED) {
-                            strPrint += "\nTry adding \"-rpcwallet=<filename>\" option to raptoreum-cli command line.";
+                            if (errCode.isNum() && errCode.get_int() == RPC_WALLET_NOT_SPECIFIED) {
+                                strPrint += "\nTry adding \"-rpcwallet=<filename>\" option to raptoreum-cli command line.";
+                            }
                         }
                     }
                 } else {

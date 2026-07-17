@@ -35,6 +35,11 @@ AppearanceWidget::AppearanceWidget(QWidget *parent) :
     ui->fontFamily->addItem(GUIUtil::fontFamilyToString(fontMontserrat), QVariant(static_cast<int>(fontMontserrat)));
     ui->fontFamily->addItem(GUIUtil::fontFamilyToString(fontManrope), QVariant(static_cast<int>(fontManrope)));
 
+    ui->fontScaleSlider->setTickPosition(QSlider::TicksBelow);
+    ui->fontScaleSlider->setTickInterval(10);
+    ui->fontScaleSlider->setSingleStep(10);
+    ui->fontScaleSlider->setPageStep(10);
+
     updateWeightSlider();
 
     mapper = new QDataWidgetMapper(this);
@@ -114,7 +119,17 @@ void AppearanceWidget::updateFontFamily(int index) {
 }
 
 void AppearanceWidget::updateFontScale(int nScale) {
-    GUIUtil::setFontScale(nScale);
+    int nSnappedScale = std::round(nScale / 10.0) * 10;
+    if (nSnappedScale != nScale) {
+        ui->fontScaleSlider->setValue(nSnappedScale);
+        return;
+    }
+    GUIUtil::setFontScale(nSnappedScale);
+    QString strPercent = QString("%1%").arg(100 + nSnappedScale);
+    if (nSnappedScale == 0) {
+        strPercent += " (" + tr("default") + ")";
+    }
+    ui->fontScaleSlider->setToolTip(strPercent);
 }
 
 void AppearanceWidget::updateFontWeightNormal(int nValue, bool fForce) {

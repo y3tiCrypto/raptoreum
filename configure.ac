@@ -1478,7 +1478,10 @@ AC_CHECK_HEADER([gmp.h])
 AC_CHECK_LIB([gmp], [__gmpz_init], [GMP_LIBS=-lgmp], [AC_MSG_ERROR([libgmp missing])])
 
 dnl check for immer header
+SAVED_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS -I\${srcdir}/src"
 AC_CHECK_HEADER([immer/map.hpp],, [AC_MSG_ERROR([immer map header not found])])
+CPPFLAGS="$SAVED_CPPFLAGS"
 
 AC_MSG_CHECKING([whether to build raptoreumd])
 AM_CONDITIONAL([BUILD_BITCOIND], [test $build_bitcoind = "yes"])
