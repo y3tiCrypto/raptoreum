@@ -1228,8 +1228,8 @@ UniValue setgenerate(const JSONRPCRequest &request) {
 
     int numCores = GenerateRaptoreums(fGenerate, nGenProcLimit, Params(), node);
 
-    nGenProcLimit = nGenProcLimit >= 0 ? nGenProcLimit : numCores;
-    std::string msg = std::to_string(nGenProcLimit) + " of " + std::to_string(numCores);
+    int nActiveThreads = fGenerate ? (nGenProcLimit >= 0 ? nGenProcLimit : numCores) : 0;
+    std::string msg = std::to_string(nActiveThreads) + " of " + std::to_string(numCores);
 
     return msg;
 }
