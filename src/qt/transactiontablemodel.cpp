@@ -379,6 +379,16 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const 
             return tr("Payment to yourself");
         case TransactionRecord::Generated:
             return tr("Mined");
+        case TransactionRecord::NewAsset:
+            return tr("Create Asset");
+        case TransactionRecord::UpdateAsset:
+            return tr("Update Asset");
+        case TransactionRecord::MintAsset:
+            return tr("Mint Asset");
+        case TransactionRecord::SendAsset:
+            return tr("Sent Asset");
+        case TransactionRecord::RecvAsset:
+            return tr("Received Asset");
         case TransactionRecord::FutureSend:
             return tr("Future Send");
         case TransactionRecord::FutureReceive:
@@ -425,6 +435,12 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
         case TransactionRecord::FutureSend:
             return formatAddressLabel(wtx->strAddress, wtx->label, tooltip) + watchAddress;
         case TransactionRecord::SendToOther:
+            return QString::fromStdString(wtx->strAddress) + watchAddress;
+        case TransactionRecord::NewAsset:
+        case TransactionRecord::UpdateAsset:
+        case TransactionRecord::MintAsset:
+        case TransactionRecord::SendAsset:
+        case TransactionRecord::RecvAsset:
             return QString::fromStdString(wtx->strAddress) + watchAddress;
         case TransactionRecord::SendToSelf:
         default:

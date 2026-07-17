@@ -1427,9 +1427,9 @@
     </message>
     <message>
       <source>Language missing or translation incomplete? Help contributing translations here:
-https://www.transifex.com/projects/p/raptoreum/</source>
+https://explore.transifex.com/feathered-inc/</source>
       <translation>지정하려는 언어가 목록에 없거나 번역이 완성되지 않았다면? 다음의 주소에서 번역을 도와주세요:
-https://www.transifex.com/projects/p/raptoreum/</translation>
+https://explore.transifex.com/feathered-inc/</translation>
     </message>
     <message>
       <source>&amp;Unit to show amounts in:</source>

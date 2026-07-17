@@ -7,6 +7,9 @@
 #include <wallet/db.h>
 
 #include <util/strencodings.h>
+#ifdef WIN32
+#include <windows.h>
+#endif
 
 #include <stdint.h>
 
@@ -49,6 +52,21 @@ namespace {
     RecursiveMutex cs_db;
     std::map <std::string, std::weak_ptr<BerkeleyEnvironment>> g_dbenvs
     GUARDED_BY(cs_db); //!< Map from directory name to db environment.
+
+#ifdef WIN32
+    static std::string GetShortPath(const fs::path& path) {
+        std::wstring wpath = path.wstring();
+        DWORD size = GetShortPathNameW(wpath.c_str(), nullptr, 0);
+        if (size > 0) {
+            std::vector<wchar_t> buffer(size);
+            if (GetShortPathNameW(wpath.c_str(), buffer.data(), size) > 0) {
+                std::wstring wshort(buffer.data());
+                return std::string(wshort.begin(), wshort.end());
+            }
+        }
+        return path.string();
+    }
+#endif
 } // namespace
 
 bool WalletDatabaseFileId::operator==(const WalletDatabaseFileId &rhs) const {
@@ -60,7 +78,12 @@ bool IsBDBWalletLoaded(const fs::path &wallet_path) {
     std::string database_filename;
     SplitWalletPath(wallet_path, env_directory, database_filename);
     LOCK(cs_db);
-    auto env = g_dbenvs.find(env_directory.string());
+#ifdef WIN32
+    std::string env_path = GetShortPath(env_directory);
+#else
+    std::string env_path = env_directory.string();
+#endif
+    auto env = g_dbenvs.find(env_path);
     if (env == g_dbenvs.end()) return false;
     auto database = env->second.lock();
     return database && database->IsDatabaseLoaded(database_filename);
@@ -77,9 +100,14 @@ std::shared_ptr <BerkeleyEnvironment> GetWalletEnv(const fs::path &wallet_path, 
     fs::path env_directory;
     SplitWalletPath(wallet_path, env_directory, database_filename);
     LOCK(cs_db);
-    auto inserted = g_dbenvs.emplace(env_directory.string(), std::weak_ptr<BerkeleyEnvironment>());
+#ifdef WIN32
+    std::string env_path = GetShortPath(env_directory);
+#else
+    std::string env_path = env_directory.string();
+#endif
+    auto inserted = g_dbenvs.emplace(env_path, std::weak_ptr<BerkeleyEnvironment>());
     if (inserted.second) {
-        auto env = std::make_shared<BerkeleyEnvironment>(env_directory.string());
+        auto env = std::make_shared<BerkeleyEnvironment>(env_path);
         inserted.first->second = env;
         return env;
     }

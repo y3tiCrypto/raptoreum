@@ -1429,9 +1429,9 @@
     </message>
     <message>
       <source>Language missing or translation incomplete? Help contributing translations here:
-https://www.transifex.com/projects/p/raptoreum/</source>
+https://explore.transifex.com/feathered-inc/</source>
       <translation>Липсва език или превода е непълен? Можете да помогнете с превода тук:
-https://www.transifex.com/projects/p/raptoreum/</translation>
+https://explore.transifex.com/feathered-inc/</translation>
     </message>
     <message>
       <source>&amp;Unit to show amounts in:</source>

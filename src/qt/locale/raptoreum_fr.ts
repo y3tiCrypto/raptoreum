@@ -2856,9 +2856,9 @@
     <message>
         <location line="+21"/>
         <source>Language missing or translation incomplete? Help contributing translations here:
-https://www.transifex.com/projects/p/raptoreum/</source>
+https://explore.transifex.com/feathered-inc/</source>
         <translation>Langage manquant ou traduction incomplète ? Participez aux traductions ici :
-https://www.transifex.com/projects/p/raptoreum/</translation>
+https://explore.transifex.com/feathered-inc/</translation>
     </message>
     <message>
         <location line="+26"/>

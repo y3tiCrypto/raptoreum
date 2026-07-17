@@ -1437,7 +1437,7 @@
     </message>
     <message>
       <source>Language missing or translation incomplete? Help contributing translations here:
-https://www.transifex.com/projects/p/raptoreum/</source>
+https://explore.transifex.com/feathered-inc/</source>
       <translation type="unfinished"></translation>
     </message>
     <message>

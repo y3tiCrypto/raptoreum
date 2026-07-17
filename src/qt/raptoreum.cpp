@@ -462,6 +462,9 @@ int GuiMain(int argc, char *argv[]) {
     // Generate high-dpi pixmaps
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    QApplication::setAttribute(Qt::AA_DisableWindowContextHelpButton);
+#endif
 
 #if defined(QT_QPA_PLATFORM_ANDROID)
     QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);

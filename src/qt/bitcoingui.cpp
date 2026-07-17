@@ -1676,8 +1676,14 @@ void BitcoinGUI::message(const QString &title, QString message, unsigned int sty
         if (!(buttons = (QMessageBox::StandardButton)(style & CClientUIInterface::BTN_MASK)))
             buttons = QMessageBox::Ok;
 
+        QWidget* parent = this;
+        Qt::WindowFlags flags = Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint;
+        if (!isVisible()) {
+            parent = nullptr;
+            flags |= Qt::WindowStaysOnTopHint;
+        }
         showNormalIfMinimized();
-        QMessageBox mBox(static_cast<QMessageBox::Icon>(nMBoxIcon), strTitle, message, buttons, this);
+        QMessageBox mBox(static_cast<QMessageBox::Icon>(nMBoxIcon), strTitle, message, buttons, parent, flags);
         mBox.setTextFormat(Qt::PlainText);
         int r = mBox.exec();
         if (ret != nullptr)

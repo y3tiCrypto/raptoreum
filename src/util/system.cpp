@@ -961,7 +961,7 @@ bool ArgsManager::ReadConfigFiles(std::string &error, bool ignore_invalid_keys) 
         }
     } else {
         // Create an empty raptoreum.conf if it does not exist
-        FILE *configFile = fopen(GetConfigFile(confPath).string().c_str(), "a");
+        FILE *configFile = fsbridge::fopen(GetConfigFile(confPath), "a");
         if (configFile != nullptr)
             fclose(configFile);
         return true; // Nothing to read, so just return

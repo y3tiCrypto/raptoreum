@@ -16,6 +16,7 @@
 #include <wallet/wallet.h>
 #include <evo/providertx.h>
 #include <evo/specialtx.h>
+#include <assets/assets.h>
 
 #include <wallet/ismine.h>
 
@@ -155,6 +156,49 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
     // LogPrintf("TransactionRecord::%s TxId: %s debitMineTypes: %02X, creditMineTypes: %02X, debit: %s, credit: %s, ValueOut: %s, TxFee: %s, nType: %d\n",
     //         __func__, hash.ToString(), debitMineTypes, creditMineTypes, FormatMoney(nDebit), FormatMoney(nCredit), FormatMoney(wtx.tx->GetValueOut()), FormatMoney(nTxFee), wtx.tx->nType);
 
+    bool isAssetTx = false;
+    std::string assetName = "";
+    if (wtx.tx->nType == TRANSACTION_NEW_ASSET) {
+        isAssetTx = true;
+        CNewAssetTx assetTx;
+        if (GetTxPayload(wtx.tx->vExtraPayload, assetTx)) {
+            assetName = assetTx.name;
+        }
+    } else if (wtx.tx->nType == TRANSACTION_MINT_ASSET) {
+        isAssetTx = true;
+        CMintAssetTx mintTx;
+        if (GetTxPayload(wtx.tx->vExtraPayload, mintTx)) {
+            CAssetMetaData meta;
+            if (passetsCache && passetsCache->GetAssetMetaData(mintTx.assetId, meta)) {
+                assetName = meta.name;
+            } else {
+                assetName = mintTx.assetId;
+            }
+        }
+    } else if (wtx.tx->nType == TRANSACTION_UPDATE_ASSET) {
+        isAssetTx = true;
+        CUpdateAssetTx updateTx;
+        if (GetTxPayload(wtx.tx->vExtraPayload, updateTx)) {
+            CAssetMetaData meta;
+            if (passetsCache && passetsCache->GetAssetMetaData(updateTx.assetId, meta)) {
+                assetName = meta.name;
+            } else {
+                assetName = updateTx.assetId;
+            }
+        }
+    } else {
+        for (const auto& out : wtx.tx->vout) {
+            if (out.scriptPubKey.IsAssetScript()) {
+                isAssetTx = true;
+                CAssetOutputEntry assetoutput;
+                if (GetAssetData(out.scriptPubKey, assetoutput)) {
+                    assetName = assetoutput.assetId;
+                    break;
+                }
+            }
+        }
+    }
+
     for (unsigned int vOutIdx = 0; vOutIdx < wtx.tx->vout.size(); ++vOutIdx) {
         const CTxOut &txout = wtx.tx->vout[vOutIdx];
 
@@ -224,7 +268,20 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
             }
 
 
-            sub.type = TransactionRecord::SendToSelf;
+            if (isAssetTx) {
+                if (wtx.tx->nType == TRANSACTION_NEW_ASSET) {
+                    sub.type = TransactionRecord::NewAsset;
+                } else if (wtx.tx->nType == TRANSACTION_MINT_ASSET) {
+                    sub.type = TransactionRecord::MintAsset;
+                } else if (wtx.tx->nType == TRANSACTION_UPDATE_ASSET) {
+                    sub.type = TransactionRecord::UpdateAsset;
+                } else {
+                    sub.type = TransactionRecord::SendAsset;
+                }
+                sub.strAddress = assetName;
+            } else {
+                sub.type = TransactionRecord::SendToSelf;
+            }
 
             sub.idx = parts.size();
             if (wtx.tx->vin.size() == 1 && wtx.tx->vout.size() == 1
@@ -253,8 +310,13 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
         // F: self     -> watched Send from wallet to watched external (and watched receive)
         if (debitMineTypes & ISMINE_SPENDABLE && !(mine & ISMINE_SPENDABLE)) {
             // Generate one or two records - sent from wallet, received by watched:
-            sub.type = isFuture ? TransactionRecord::FutureSend : (validDestination ? TransactionRecord::SendToAddress
-                                                                                    : TransactionRecord::SendToOther);
+            if (isAssetTx) {
+                sub.type = TransactionRecord::SendAsset;
+                sub.strAddress = assetName;
+            } else {
+                sub.type = isFuture ? TransactionRecord::FutureSend : (validDestination ? TransactionRecord::SendToAddress
+                                                                                        : TransactionRecord::SendToOther);
+            }
 
             // Sent from wallet:
             sub.involvesWatchAddress = false;
@@ -266,9 +328,14 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
             // If received by Watch, add a receive transaction on the watched side:
             if (mine & ISMINE_WATCH_ONLY) {
                 sub.involvesWatchAddress = true;
-                sub.type = isFuture ? TransactionRecord::FutureReceive : (validDestination
-                                                                          ? TransactionRecord::RecvWithAddress
-                                                                          : TransactionRecord::RecvFromOther);
+                if (isAssetTx) {
+                    sub.type = TransactionRecord::RecvAsset;
+                    sub.strAddress = assetName;
+                } else {
+                    sub.type = isFuture ? TransactionRecord::FutureReceive : (validDestination
+                                                                              ? TransactionRecord::RecvWithAddress
+                                                                              : TransactionRecord::RecvFromOther);
+                }
                 sub.debit = 0;
                 sub.credit = txout.nValue;
                 parts.append(sub);
@@ -283,9 +350,14 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
         if (!(debitMineTypes & ISMINE_SPENDABLE) && mine & ISMINE_SPENDABLE) {
             // Generate one or two records - receive with wallet, sent by watched:
             sub.involvesWatchAddress = false;
-            sub.type = isFuture ? TransactionRecord::FutureReceive : (validDestination
-                                                                      ? TransactionRecord::RecvWithAddress
-                                                                      : TransactionRecord::RecvFromOther);
+            if (isAssetTx) {
+                sub.type = TransactionRecord::RecvAsset;
+                sub.strAddress = assetName;
+            } else {
+                sub.type = isFuture ? TransactionRecord::FutureReceive : (validDestination
+                                                                          ? TransactionRecord::RecvWithAddress
+                                                                          : TransactionRecord::RecvFromOther);
+            }
 
             // Received with wallet:
             sub.credit = txout.nValue;
@@ -294,9 +366,14 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
             // If sent by Watch, add a sent transaction on the watched side:
             if (debitMineTypes & ISMINE_WATCH_ONLY) {
                 sub.involvesWatchAddress = true;
-                sub.type = isFuture ? TransactionRecord::FutureSend : (validDestination
-                                                                       ? TransactionRecord::SendToAddress
-                                                                       : TransactionRecord::SendToOther);
+                if (isAssetTx) {
+                    sub.type = TransactionRecord::SendAsset;
+                    sub.strAddress = assetName;
+                } else {
+                    sub.type = isFuture ? TransactionRecord::FutureSend : (validDestination
+                                                                           ? TransactionRecord::SendToAddress
+                                                                           : TransactionRecord::SendToOther);
+                }
                 sub.debit = -(txout.nValue + nTxFee);
                 nTxFee = 0; // Add fee to first output
                 sub.credit = 0;
@@ -314,7 +391,12 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
 
             // Sent by watched address:
             if (inputInvolvesWatchAddress) {
-                sub.type = isFuture ? TransactionRecord::FutureSend : TransactionRecord::SendToOther;
+                if (isAssetTx) {
+                    sub.type = TransactionRecord::SendAsset;
+                    sub.strAddress = assetName;
+                } else {
+                    sub.type = isFuture ? TransactionRecord::FutureSend : TransactionRecord::SendToOther;
+                }
                 sub.debit = -(txout.nValue + nTxFee);
                 nTxFee = 0; // Add fee to first output
                 sub.credit = 0;
@@ -324,7 +406,12 @@ TransactionRecord::decomposeTransaction(interfaces::Wallet &wallet, const interf
             // If received by Watch, add a receive transaction on the watched side:
             if (outputInvolvesWatchAddress && mine) {
                 sub.involvesWatchAddress = true;
-                sub.type = isFuture ? TransactionRecord::FutureReceive : TransactionRecord::RecvWithAddress;
+                if (isAssetTx) {
+                    sub.type = TransactionRecord::RecvAsset;
+                    sub.strAddress = assetName;
+                } else {
+                    sub.type = isFuture ? TransactionRecord::FutureReceive : TransactionRecord::RecvWithAddress;
+                }
                 sub.debit = 0;
                 sub.credit = txout.nValue;
                 parts.append(sub);
