@@ -257,7 +257,7 @@ namespace llmq {
         friend class CDKGLogger;
 
     private:
-        const Consensus::LLMQParams &params;
+        Consensus::LLMQParams params;
 
         CBLSWorker &blsWorker;
         CBLSWorkerCache cache;

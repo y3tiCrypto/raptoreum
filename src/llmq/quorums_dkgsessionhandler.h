@@ -113,7 +113,7 @@ namespace llmq {
         mutable RecursiveMutex cs;
         std::atomic<bool> stopRequested{false};
 
-        const Consensus::LLMQParams &params;
+        Consensus::LLMQParams params;
         CConnman &connman;
         CBLSWorker &blsWorker;
         CDKGSessionManager &dkgManager;
